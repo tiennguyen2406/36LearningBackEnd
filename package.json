@@ -2,9 +2,10 @@
   "name": "app36learning",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-  "dev": "nodemon src/index.js"
-},
+    "dev": "nodemon src/index.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
