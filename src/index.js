@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import cors from "cors";
 import usersRoutes from "./routes/users.js";
 import coursesRoutes from "./routes/courses.js";
+import categoriesRoutes from "./routes/categories.js";
+import lessonsRoutes from "./routes/lessons.js";
 
 dotenv.config();
 const app = express();
@@ -23,6 +25,8 @@ app.use(
 // routes
 app.use("/users", usersRoutes);
 app.use("/courses", coursesRoutes);
+app.use("/categories", categoriesRoutes);
+app.use("/lessons", lessonsRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

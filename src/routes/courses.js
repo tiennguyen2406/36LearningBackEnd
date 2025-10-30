@@ -5,7 +5,6 @@ const router = express.Router();
 
 // POST /courses -> tạo course
 router.post("/", createCourse);
-
 // GET /courses -> lấy danh sách course
 router.get("/", getCourses);
 

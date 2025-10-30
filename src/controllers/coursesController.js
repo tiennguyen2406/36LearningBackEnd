@@ -7,6 +7,7 @@ export const createCourse = async (req, res) => {
     const courseRef = firestore.collection("Courses").doc(); // tự tạo ID
     await courseRef.set({
       ...data,
+      id: courseRef.id,
       createdAt: new Date(),
       updatedAt: new Date(),
       students: 0,
