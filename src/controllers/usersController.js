@@ -121,8 +121,27 @@ export const getUserCourses = async (req, res) => {
 
     const coursePromises = enrolled.map((id) => firestore.collection("Courses").doc(id).get());
     const courseDocs = await Promise.all(coursePromises);
-    const courses = courseDocs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
-    return res.status(200).json(courses);
+    
+    // Lấy categoryName cho mỗi course
+    const coursesWithCategory = await Promise.all(
+      courseDocs.filter(d => d.exists).map(async (doc) => {
+        const data = doc.data();
+        let categoryName = undefined;
+        if (data.category) {
+          try {
+            const categorySnap = await firestore.collection("Categories").doc(data.category).get();
+            if (categorySnap.exists) {
+              categoryName = categorySnap.data().name;
+            }
+          } catch (e) {
+            console.error(`Error fetching category for ${data.category}:`, e);
+          }
+        }
+        return { id: doc.id, ...data, categoryName };
+      })
+    );
+    
+    return res.status(200).json(coursesWithCategory);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
