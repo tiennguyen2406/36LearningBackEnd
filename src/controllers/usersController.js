@@ -122,11 +122,14 @@ export const getUserCourses = async (req, res) => {
     const coursePromises = enrolled.map((id) => firestore.collection("Courses").doc(id).get());
     const courseDocs = await Promise.all(coursePromises);
     
-    // Lấy categoryName cho mỗi course
+    // Lấy categoryName và số lượng lessons thực tế cho mỗi course
     const coursesWithCategory = await Promise.all(
       courseDocs.filter(d => d.exists).map(async (doc) => {
         const data = doc.data();
+        const courseId = doc.id;
         let categoryName = undefined;
+        let lessonCount = 0;
+        
         if (data.category) {
           try {
             const categorySnap = await firestore.collection("Categories").doc(data.category).get();
@@ -137,7 +140,24 @@ export const getUserCourses = async (req, res) => {
             console.error(`Error fetching category for ${data.category}:`, e);
           }
         }
-        return { id: doc.id, ...data, categoryName };
+        
+        // Đếm số lượng lessons thực tế
+        try {
+          const lessonsSnapshot = await firestore
+            .collection("Lessons")
+            .where("courseId", "==", courseId)
+            .get();
+          lessonCount = lessonsSnapshot.size;
+        } catch (e) {
+          console.error(`Error counting lessons for ${courseId}:`, e);
+        }
+        
+        return { 
+          id: courseId, 
+          ...data, 
+          categoryName,
+          totalLessons: lessonCount // Ghi đè totalLessons bằng số thực tế
+        };
       })
     );
     
