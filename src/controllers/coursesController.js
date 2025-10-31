@@ -54,8 +54,47 @@ export const createCourse = async (req, res) => {
 export const getCourses = async (req, res) => {
   try {
     const snapshot = await firestore.collection("Courses").get();
-    const courses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    res.status(200).json(courses);
+    
+    // Lấy categoryName và số lượng lessons thực tế cho mỗi course
+    const coursesWithCategory = await Promise.all(
+      snapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        const courseId = doc.id;
+        let categoryName = undefined;
+        let lessonCount = data.totalLessons || 0;
+        
+        if (data.category) {
+          try {
+            const categorySnap = await firestore.collection("Categories").doc(data.category).get();
+            if (categorySnap.exists) {
+              categoryName = categorySnap.data().name;
+            }
+          } catch (e) {
+            console.error(`Error fetching category for ${data.category}:`, e);
+          }
+        }
+        
+        // Đếm số lượng lessons thực tế
+        try {
+          const lessonsSnapshot = await firestore
+            .collection("Lessons")
+            .where("courseId", "==", courseId)
+            .get();
+          lessonCount = lessonsSnapshot.size;
+        } catch (e) {
+          console.error(`Error counting lessons for ${courseId}:`, e);
+        }
+        
+        return { 
+          id: courseId, 
+          ...data, 
+          categoryName,
+          totalLessons: lessonCount // Ghi đè totalLessons bằng số thực tế
+        };
+      })
+    );
+    
+    res.status(200).json(coursesWithCategory);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
@@ -102,18 +141,36 @@ export const getCoursesByCategory = async (req, res) => {
     const categoryName = categoryDoc.exists ? categoryDoc.data().name : "Unknown";
     
     const snapshot = await query.get();
-    const courses = snapshot.docs.map(doc => {
-      const data = doc.data();
-      // Thay thế ID của danh mục bằng tên danh mục để dễ hiển thị
-      return {
-        id: doc.id,
-        ...data,
-        categoryName: categoryName, // Thêm tên danh mục
-        categoryId: data.category // Giữ lại ID danh mục với tên khác
-      };
-    });
     
-    res.status(200).json(courses);
+    // Lấy số lượng lessons thực tế cho mỗi course
+    const coursesWithLessons = await Promise.all(
+      snapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        const courseId = doc.id;
+        let lessonCount = data.totalLessons || 0;
+        
+        // Đếm số lượng lessons thực tế
+        try {
+          const lessonsSnapshot = await firestore
+            .collection("Lessons")
+            .where("courseId", "==", courseId)
+            .get();
+          lessonCount = lessonsSnapshot.size;
+        } catch (e) {
+          console.error(`Error counting lessons for ${courseId}:`, e);
+        }
+        
+        return {
+          id: courseId,
+          ...data,
+          categoryName: categoryName, // Thêm tên danh mục
+          categoryId: data.category, // Giữ lại ID danh mục với tên khác
+          totalLessons: lessonCount // Ghi đè totalLessons bằng số thực tế
+        };
+      })
+    );
+    
+    res.status(200).json(coursesWithLessons);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
