@@ -34,3 +34,15 @@ export const getLessons = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+export const getLessonCountByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    if (!courseId) return res.status(400).json({ error: "Missing courseId" });
+    const snapshot = await firestore.collection("Lessons").where("courseId", "==", courseId).get();
+    return res.status(200).json({ courseId, count: snapshot.size });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
