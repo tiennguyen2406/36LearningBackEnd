@@ -125,6 +125,7 @@ export const getCourseById = async (req, res) => {
 export const getCoursesByCategory = async (req, res) => {
   try {
     const categoryId = req.params.categoryId;
+    console.log(`[getCoursesByCategory] Fetching courses for categoryId: ${categoryId}`);
     
     // Lấy courses với điều kiện category = categoryId và isPublished = true (nếu specified)
     let query = firestore.collection("Courses").where("category", "==", categoryId);
@@ -139,8 +140,10 @@ export const getCoursesByCategory = async (req, res) => {
     // Lấy thông tin chi tiết về danh mục
     const categoryDoc = await firestore.collection("Categories").doc(categoryId).get();
     const categoryName = categoryDoc.exists ? categoryDoc.data().name : "Unknown";
+    console.log(`[getCoursesByCategory] Category name: ${categoryName}`);
     
     const snapshot = await query.get();
+    console.log(`[getCoursesByCategory] Found ${snapshot.size} courses for category ${categoryName}`);
     
     // Lấy số lượng lessons thực tế cho mỗi course
     const coursesWithLessons = await Promise.all(
