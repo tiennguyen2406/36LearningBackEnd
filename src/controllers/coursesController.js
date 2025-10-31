@@ -62,6 +62,26 @@ export const getCourses = async (req, res) => {
   }
 };
 
+// Lấy chi tiết course theo ID
+export const getCourseById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const docSnap = await firestore.collection("Courses").doc(id).get();
+    if (!docSnap.exists) return res.status(404).send("Course not found");
+
+    const data = docSnap.data() || {};
+    let categoryName = undefined;
+    if (data.category) {
+      const categorySnap = await firestore.collection("Categories").doc(data.category).get();
+      if (categorySnap.exists) categoryName = categorySnap.data().name;
+    }
+    return res.status(200).json({ id: docSnap.id, ...data, categoryName });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
 // Lấy danh sách courses theo category ID
 export const getCoursesByCategory = async (req, res) => {
   try {
