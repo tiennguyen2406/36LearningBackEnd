@@ -52,12 +52,22 @@ export const getLessonsByCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
     if (!courseId) return res.status(400).json({ error: "Missing courseId" });
+    
+    // Fetch lessons không dùng orderBy để tránh lỗi index
     const snapshot = await firestore
       .collection("Lessons")
       .where("courseId", "==", courseId)
-      .orderBy("order")
       .get();
-    const lessons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Map và sort ở backend
+    const lessons = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => {
+        const orderA = a.order || 0;
+        const orderB = b.order || 0;
+        return orderA - orderB;
+      });
+    
     return res.status(200).json(lessons);
   } catch (error) {
     console.error(error);
