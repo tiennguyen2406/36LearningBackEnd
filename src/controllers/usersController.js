@@ -52,3 +52,27 @@ export const getUsers = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Lấy danh sách khóa học của một user theo uid
+export const getUserCourses = async (req, res) => {
+  try {
+    const { uid } = req.params;
+    if (!uid) return res.status(400).json({ error: "Missing uid" });
+
+    const userSnap = await firestore.collection("Users").doc(uid).get();
+    if (!userSnap.exists) return res.status(404).json({ error: "User not found" });
+    const user = { uid: userSnap.id, ...userSnap.data() };
+    const enrolled = Array.isArray(user.enrolledCourses) ? user.enrolledCourses : [];
+
+    if (!enrolled.length) return res.status(200).json([]);
+
+    // Fetch courses by id deterministically
+    const coursePromises = enrolled.map((id) => firestore.collection("Courses").doc(id).get());
+    const courseDocs = await Promise.all(coursePromises);
+    const courses = courseDocs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
+    return res.status(200).json(courses);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
