@@ -46,3 +46,21 @@ export const getLessonCountByCourse = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Lấy danh sách bài học theo courseId (sắp xếp theo order)
+export const getLessonsByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    if (!courseId) return res.status(400).json({ error: "Missing courseId" });
+    const snapshot = await firestore
+      .collection("Lessons")
+      .where("courseId", "==", courseId)
+      .orderBy("order")
+      .get();
+    const lessons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return res.status(200).json(lessons);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};

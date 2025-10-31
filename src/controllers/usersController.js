@@ -192,3 +192,43 @@ export const enrollCourse = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Hủy tham gia khóa học (unenroll)
+export const unenrollCourse = async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { courseId } = req.body;
+    
+    if (!uid || !courseId) {
+      return res.status(400).json({ error: "Missing uid or courseId" });
+    }
+
+    // Kiểm tra user có tồn tại không
+    const userRef = firestore.collection("Users").doc(uid);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Lấy enrolledCourses hiện tại
+    const userData = userDoc.data();
+    const enrolledCourses = Array.isArray(userData.enrolledCourses) ? userData.enrolledCourses : [];
+
+    // Kiểm tra user có enroll course này chưa
+    if (!enrolledCourses.includes(courseId)) {
+      return res.status(200).json({ message: "User chưa tham gia khóa học này" });
+    }
+
+    // Xóa courseId khỏi enrolledCourses
+    const updatedEnrolledCourses = enrolledCourses.filter(id => id !== courseId);
+    await userRef.update({
+      enrolledCourses: updatedEnrolledCourses,
+      updatedAt: new Date()
+    });
+
+    res.status(200).json({ message: "Đã hủy tham gia khóa học thành công" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
