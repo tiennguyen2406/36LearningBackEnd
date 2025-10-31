@@ -17,6 +17,8 @@ app.use(
       const defaultOrigins = [
         "http://localhost:8081",
         "http://localhost:19006",
+        "http://localhost:8083",
+        "http://127.0.0.1:8083",
       ];
       const envOrigins = (process.env.ALLOWED_ORIGINS || "")
         .split(",")
