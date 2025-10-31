@@ -52,3 +52,60 @@ export const getUsers = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Lấy thông tin user theo ID
+export const getUserById = async (req, res) => {
+  try {
+    const uid = req.params.id;
+    const userDoc = await firestore.collection("Users").doc(uid).get();
+    
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    }
+    
+    const userData = { uid: userDoc.id, ...userDoc.data() };
+    res.status(200).json(userData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Cập nhật thông tin user
+export const updateUser = async (req, res) => {
+  try {
+    const uid = req.params.id;
+    const data = req.body;
+    
+    // Kiểm tra user có tồn tại không
+    const userDoc = await firestore.collection("Users").doc(uid).get();
+    
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    }
+    
+    // Validate email nếu được cung cấp
+    if (data.email) {
+      const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+      if (!emailRegex.test(data.email)) {
+        return res.status(400).json({ error: "Email không hợp lệ!" });
+      }
+    }
+    
+    // Xóa các trường không được phép cập nhật
+    delete data.password;      // Không cho phép cập nhật password qua API này
+    delete data.createdAt;     // Không thể sửa ngày tạo tài khoản
+    delete data.username;      // Không cho phép thay đổi username
+    
+    // Cập nhật thông tin user
+    await firestore.collection("Users").doc(uid).update({
+      ...data,
+      updatedAt: new Date()
+    });
+    
+    res.status(200).json({ message: "Đã cập nhật thông tin người dùng" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
