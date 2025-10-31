@@ -58,11 +58,9 @@ export const getUserById = async (req, res) => {
   try {
     const uid = req.params.id;
     const userDoc = await firestore.collection("Users").doc(uid).get();
-    
     if (!userDoc.exists) {
       return res.status(404).json({ error: "Không tìm thấy người dùng" });
     }
-    
     const userData = { uid: userDoc.id, ...userDoc.data() };
     res.status(200).json(userData);
   } catch (error) {
@@ -76,14 +74,13 @@ export const updateUser = async (req, res) => {
   try {
     const uid = req.params.id;
     const data = req.body;
-    
+
     // Kiểm tra user có tồn tại không
     const userDoc = await firestore.collection("Users").doc(uid).get();
-    
     if (!userDoc.exists) {
       return res.status(404).json({ error: "Không tìm thấy người dùng" });
     }
-    
+
     // Validate email nếu được cung cấp
     if (data.email) {
       const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
@@ -91,19 +88,41 @@ export const updateUser = async (req, res) => {
         return res.status(400).json({ error: "Email không hợp lệ!" });
       }
     }
-    
+
     // Xóa các trường không được phép cập nhật
-    delete data.password;      // Không cho phép cập nhật password qua API này
-    delete data.createdAt;     // Không thể sửa ngày tạo tài khoản
-    delete data.username;      // Không cho phép thay đổi username
-    
+    delete data.password;
+    delete data.createdAt;
+    delete data.username;
+
     // Cập nhật thông tin user
     await firestore.collection("Users").doc(uid).update({
       ...data,
       updatedAt: new Date()
     });
-    
     res.status(200).json({ message: "Đã cập nhật thông tin người dùng" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Lấy danh sách khóa học của một user theo uid
+export const getUserCourses = async (req, res) => {
+  try {
+    const { uid } = req.params;
+    if (!uid) return res.status(400).json({ error: "Missing uid" });
+
+    const userSnap = await firestore.collection("Users").doc(uid).get();
+    if (!userSnap.exists) return res.status(404).json({ error: "User not found" });
+    const user = { uid: userSnap.id, ...userSnap.data() };
+    const enrolled = Array.isArray(user.enrolledCourses) ? user.enrolledCourses : [];
+
+    if (!enrolled.length) return res.status(200).json([]);
+
+    const coursePromises = enrolled.map((id) => firestore.collection("Courses").doc(id).get());
+    const courseDocs = await Promise.all(coursePromises);
+    const courses = courseDocs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
+    return res.status(200).json(courses);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
