@@ -17,19 +17,34 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, "..", ".env") });
 
 // Debug: Kiểm tra biến môi trường
-console.log("🔍 MONGO_URI:", process.env.MONGO_URI ? "✅ Đã load" : "❌ Chưa load");
+console.log(
+  "🔍 MONGO_URI:",
+  process.env.MONGO_URI ? "✅ Đã load" : "❌ Chưa load"
+);
 
 const app = express();
 app.use(express.json());
 
-// Fallback URI nếu không load được từ .env
-const MONGO_URI = process.env.MONGO_URI || 
-  "mongodb+srv://khaitien600_db_user:123@kt.3je3tjx.mongodb.net/app36learning?retryWrites=true&w=majority";
+// Lấy MONGO_URI từ biến môi trường
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.error(
+    "❌ MONGO_URI không được cấu hình trong file .env hoặc Environment Variables"
+  );
+  console.error(
+    "💡 Vui lòng tạo file .env và thêm: MONGO_URI=mongodb+srv://..."
+  );
+  process.exit(1);
+}
 
 mongoose
   .connect(MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Error:", err));
+  .catch((err) => {
+    console.error("❌ MongoDB Error:", err);
+    process.exit(1);
+  });
 
 // CORS
 app.use(
@@ -52,7 +67,8 @@ app.use(
         .filter(Boolean);
       const allowlist = new Set([...defaultOrigins, ...envOrigins]);
       // Hỗ trợ mạng nội bộ: 192.168.x.x, 10.x.x.x, 172.16-31.x.x và http/https
-      const lanRegex = /^(http|https):\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)[0-9\.]+/;
+      const lanRegex =
+        /^(http|https):\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)[0-9\.]+/;
       if (!origin) return callback(null, true);
       if (allowlist.has(origin) || lanRegex.test(origin)) {
         return callback(null, true);
@@ -80,4 +96,6 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 4000;
 const HOST = process.env.HOST || "0.0.0.0"; // bind tất cả interfaces để thiết bị cùng mạng truy cập
-app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
+app.listen(PORT, HOST, () =>
+  console.log(`Server running on http://${HOST}:${PORT}`)
+);
