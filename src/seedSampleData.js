@@ -10,7 +10,6 @@ function slugify(text) {
 }
 
 async function seed() {
-  // ----- Users (Instructors) -----
   const instructors = Array.from({ length: 10 }).map((_, i) => {
     const idx = (i + 1).toString().padStart(2, "0");
     return {
@@ -38,12 +37,10 @@ async function seed() {
     console.log(`Upserted Instructor: ${user.username}`);
   }
 
-  // Gán ngẫu nhiên 2-4 khóa học cho mỗi instructor nếu dữ liệu khóa học đã có
   try {
     const coursesSnap = await firestore.collection("Courses").limit(20).get();
-    const courseIds = coursesSnap.docs.map(d => d.id);
+    const courseIds = coursesSnap.docs.map((d) => d.id);
     if (courseIds.length) {
-      // Upsert user 'congy' and assign 8 courses
       try {
         const congyRef = firestore.collection("Users").doc("congy");
         const eight = courseIds.slice(0, Math.min(8, courseIds.length));
@@ -55,7 +52,11 @@ async function seed() {
             password: "Passw0rd!",
             fullName: "Congy",
             role: "student",
-            preferences: { language: "vi", darkMode: false, notifications: true },
+            preferences: {
+              language: "vi",
+              darkMode: false,
+              notifications: true,
+            },
             enrolledCourses: eight,
             createdAt: new Date(),
             lastLogin: new Date(),

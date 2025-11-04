@@ -22,7 +22,7 @@ app.use(
       ];
       const envOrigins = (process.env.ALLOWED_ORIGINS || "")
         .split(",")
-        .map(s => s.trim())
+        .map((s) => s.trim())
         .filter(Boolean);
       const allowlist = new Set([...defaultOrigins, ...envOrigins]);
       const localNetworkRegex = /http:\/\/192\.168\.[0-9\.]+/;
@@ -38,9 +38,6 @@ app.use(
   })
 );
 
-// Preflight: cors middleware already handles OPTIONS automatically in Express 5
-
-// routes
 app.use("/users", usersRoutes);
 app.use("/courses", coursesRoutes);
 app.use("/categories", categoriesRoutes);
