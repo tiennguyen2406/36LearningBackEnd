@@ -16,11 +16,18 @@ const __dirname = dirname(__filename);
 // Load .env từ thư mục root của project
 dotenv.config({ path: join(__dirname, "..", ".env") });
 
+// Debug: Kiểm tra biến môi trường
+console.log("🔍 MONGO_URI:", process.env.MONGO_URI ? "✅ Đã load" : "❌ Chưa load");
+
 const app = express();
 app.use(express.json());
 
+// Fallback URI nếu không load được từ .env
+const MONGO_URI = process.env.MONGO_URI || 
+  "mongodb+srv://khaitien600_db_user:123@kt.3je3tjx.mongodb.net/app36learning?retryWrites=true&w=majority";
+
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Error:", err));
 
