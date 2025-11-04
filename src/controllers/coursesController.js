@@ -1,22 +1,22 @@
-import { firestore } from "../firebase.js";
+import Course from "../models/Course.js";
+import Category from "../models/Category.js";
+import Lesson from "../models/Lesson.js";
 
 // Function helper để cập nhật courseCount
 async function updateCategoryCount(categoryId) {
   if (!categoryId) return;
-  
+
   try {
-    const courseCount = await firestore
-      .collection("Courses")
-      .where("category", "==", categoryId)
-      .where("isPublished", "==", true)
-      .get()
-      .then(snapshot => snapshot.size);
-      
-    await firestore.collection("Categories").doc(categoryId).update({
-      courseCount,
-      updatedAt: new Date()
+    const courseCount = await Course.countDocuments({
+      category: categoryId,
+      isPublished: true,
     });
-    
+
+    await Category.findByIdAndUpdate(categoryId, {
+      courseCount,
+      updatedAt: new Date(),
+    });
+
     console.log(`Đã cập nhật courseCount cho danh mục ${categoryId}: ${courseCount}`);
   } catch (error) {
     console.error(`Lỗi khi cập nhật courseCount cho ${categoryId}:`, error);
@@ -27,23 +27,19 @@ async function updateCategoryCount(categoryId) {
 export const createCourse = async (req, res) => {
   try {
     const data = req.body;
-    const courseRef = firestore.collection("Courses").doc(); // tự tạo ID
-    await courseRef.set({
+    const course = await Course.create({
       ...data,
-      id: courseRef.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
       students: 0,
       rating: 0,
       isPublished: false,
     });
-    
+
     // Cập nhật số lượng khóa học trong danh mục
     if (data.category) {
       await updateCategoryCount(data.category);
     }
-    
-    res.status(201).json({ message: "Course created", id: courseRef.id });
+
+    res.status(201).json({ message: "Course created", id: course._id.toString() });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
@@ -53,47 +49,24 @@ export const createCourse = async (req, res) => {
 // Lấy danh sách tất cả courses
 export const getCourses = async (req, res) => {
   try {
-    const snapshot = await firestore.collection("Courses").get();
-    
-    // Lấy categoryName và số lượng lessons thực tế cho mỗi course
+    const courses = await Course.find().populate("category", "name");
+
+    // Lấy số lượng lessons thực tế cho mỗi course
     const coursesWithCategory = await Promise.all(
-      snapshot.docs.map(async (doc) => {
-        const data = doc.data();
-        const courseId = doc.id;
-        let categoryName = undefined;
-        let lessonCount = data.totalLessons || 0;
-        
-        if (data.category) {
-          try {
-            const categorySnap = await firestore.collection("Categories").doc(data.category).get();
-            if (categorySnap.exists) {
-              categoryName = categorySnap.data().name;
-            }
-          } catch (e) {
-            console.error(`Error fetching category for ${data.category}:`, e);
-          }
-        }
-        
-        // Đếm số lượng lessons thực tế
-        try {
-          const lessonsSnapshot = await firestore
-            .collection("Lessons")
-            .where("courseId", "==", courseId)
-            .get();
-          lessonCount = lessonsSnapshot.size;
-        } catch (e) {
-          console.error(`Error counting lessons for ${courseId}:`, e);
-        }
-        
-        return { 
-          id: courseId, 
-          ...data, 
-          categoryName,
-          totalLessons: lessonCount // Ghi đè totalLessons bằng số thực tế
+      courses.map(async (course) => {
+        const lessonCount = await Lesson.countDocuments({ courseId: course._id });
+        const courseObj = course.toObject();
+        return {
+          id: courseObj._id.toString(),
+          ...courseObj,
+          _id: undefined,
+          categoryName: course.category?.name || undefined,
+          category: course.category?._id.toString(),
+          totalLessons: lessonCount,
         };
       })
     );
-    
+
     res.status(200).json(coursesWithCategory);
   } catch (error) {
     console.error(error);
@@ -105,16 +78,17 @@ export const getCourses = async (req, res) => {
 export const getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
-    const docSnap = await firestore.collection("Courses").doc(id).get();
-    if (!docSnap.exists) return res.status(404).send("Course not found");
+    const course = await Course.findById(id).populate("category", "name");
+    if (!course) return res.status(404).send("Course not found");
 
-    const data = docSnap.data() || {};
-    let categoryName = undefined;
-    if (data.category) {
-      const categorySnap = await firestore.collection("Categories").doc(data.category).get();
-      if (categorySnap.exists) categoryName = categorySnap.data().name;
-    }
-    return res.status(200).json({ id: docSnap.id, ...data, categoryName });
+    const courseObj = course.toObject();
+    return res.status(200).json({
+      id: courseObj._id.toString(),
+      ...courseObj,
+      _id: undefined,
+      categoryName: course.category?.name || undefined,
+      category: course.category?._id.toString(),
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
@@ -126,53 +100,40 @@ export const getCoursesByCategory = async (req, res) => {
   try {
     const categoryId = req.params.categoryId;
     console.log(`[getCoursesByCategory] Fetching courses for categoryId: ${categoryId}`);
-    
-    // Lấy courses với điều kiện category = categoryId và isPublished = true (nếu specified)
-    let query = firestore.collection("Courses").where("category", "==", categoryId);
-    
+
+    // Xây dựng query
+    const query = { category: categoryId };
+
     // Kiểm tra nếu có yêu cầu lọc theo isPublished
     const { published } = req.query;
     if (published !== undefined) {
-      const isPublished = published === 'true';
-      query = query.where("isPublished", "==", isPublished);
+      query.isPublished = published === "true";
     }
-    
+
     // Lấy thông tin chi tiết về danh mục
-    const categoryDoc = await firestore.collection("Categories").doc(categoryId).get();
-    const categoryName = categoryDoc.exists ? categoryDoc.data().name : "Unknown";
+    const category = await Category.findById(categoryId);
+    const categoryName = category ? category.name : "Unknown";
     console.log(`[getCoursesByCategory] Category name: ${categoryName}`);
-    
-    const snapshot = await query.get();
-    console.log(`[getCoursesByCategory] Found ${snapshot.size} courses for category ${categoryName}`);
-    
+
+    const courses = await Course.find(query).populate("category", "name");
+    console.log(`[getCoursesByCategory] Found ${courses.length} courses for category ${categoryName}`);
+
     // Lấy số lượng lessons thực tế cho mỗi course
     const coursesWithLessons = await Promise.all(
-      snapshot.docs.map(async (doc) => {
-        const data = doc.data();
-        const courseId = doc.id;
-        let lessonCount = data.totalLessons || 0;
-        
-        // Đếm số lượng lessons thực tế
-        try {
-          const lessonsSnapshot = await firestore
-            .collection("Lessons")
-            .where("courseId", "==", courseId)
-            .get();
-          lessonCount = lessonsSnapshot.size;
-        } catch (e) {
-          console.error(`Error counting lessons for ${courseId}:`, e);
-        }
-        
+      courses.map(async (course) => {
+        const lessonCount = await Lesson.countDocuments({ courseId: course._id });
+        const courseObj = course.toObject();
         return {
-          id: courseId,
-          ...data,
-          categoryName: categoryName, // Thêm tên danh mục
-          categoryId: data.category, // Giữ lại ID danh mục với tên khác
-          totalLessons: lessonCount // Ghi đè totalLessons bằng số thực tế
+          id: courseObj._id.toString(),
+          ...courseObj,
+          _id: undefined,
+          categoryName: categoryName,
+          categoryId: course.category?._id.toString(),
+          totalLessons: lessonCount,
         };
       })
     );
-    
+
     res.status(200).json(coursesWithLessons);
   } catch (error) {
     console.error(error);
@@ -185,38 +146,34 @@ export const updateCourse = async (req, res) => {
   try {
     const courseId = req.params.id;
     const data = req.body;
-    
+
     // Lấy thông tin khóa học cũ để biết category cũ
-    const courseRef = firestore.collection("Courses").doc(courseId);
-    const courseDoc = await courseRef.get();
-    
-    if (!courseDoc.exists) {
+    const course = await Course.findById(courseId);
+    if (!course) {
       return res.status(404).json({ error: "Course not found" });
     }
-    
-    const oldCategoryId = courseDoc.data().category;
-    const oldPublished = courseDoc.data().isPublished;
-    
+
+    const oldCategoryId = course.category?.toString();
+    const oldPublished = course.isPublished;
+
     // Cập nhật khóa học
-    await courseRef.update({
-      ...data,
-      updatedAt: new Date()
-    });
-    
+    Object.assign(course, data);
+    await course.save();
+
     // Cập nhật số lượng khóa học cho các danh mục nếu cần
-    const newCategoryId = data.category;
+    const newCategoryId = data.category?.toString();
     const newPublished = data.isPublished;
-    
+
     // Cập nhật nếu thay đổi danh mục hoặc thay đổi trạng thái xuất bản
     if (newCategoryId !== undefined && newCategoryId !== oldCategoryId) {
       // Nếu thay đổi danh mục, cập nhật cả danh mục cũ và mới
-      await updateCategoryCount(oldCategoryId);
+      if (oldCategoryId) await updateCategoryCount(oldCategoryId);
       await updateCategoryCount(newCategoryId);
     } else if (newPublished !== undefined && newPublished !== oldPublished) {
       // Nếu chỉ thay đổi trạng thái xuất bản, cập nhật danh mục hiện tại
-      await updateCategoryCount(oldCategoryId || data.category);
+      await updateCategoryCount(oldCategoryId || newCategoryId);
     }
-    
+
     res.status(200).json({ message: "Course updated" });
   } catch (error) {
     console.error(error);
@@ -228,25 +185,23 @@ export const updateCourse = async (req, res) => {
 export const deleteCourse = async (req, res) => {
   try {
     const courseId = req.params.id;
-    
+
     // Lấy thông tin khóa học để biết danh mục
-    const courseRef = firestore.collection("Courses").doc(courseId);
-    const courseDoc = await courseRef.get();
-    
-    if (!courseDoc.exists) {
+    const course = await Course.findById(courseId);
+    if (!course) {
       return res.status(404).json({ error: "Course not found" });
     }
-    
-    const categoryId = courseDoc.data().category;
-    
+
+    const categoryId = course.category?.toString();
+
     // Xóa khóa học
-    await courseRef.delete();
-    
+    await Course.findByIdAndDelete(courseId);
+
     // Cập nhật số lượng khóa học trong danh mục
     if (categoryId) {
       await updateCategoryCount(categoryId);
     }
-    
+
     res.status(200).json({ message: "Course deleted" });
   } catch (error) {
     console.error(error);

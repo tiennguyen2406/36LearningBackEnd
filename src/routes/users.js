@@ -7,12 +7,16 @@ import {
   getUserCourses,
   enrollCourse,
   unenrollCourse,
+  loginUser,
 } from "../controllers/usersController.js";
 
 const router = express.Router();
 
 // POST /users -> tạo user
 router.post("/", createUser);
+
+// POST /users/login -> đăng nhập
+router.post("/login", loginUser);
 
 // GET /users -> lấy danh sách users
 router.get("/", getUsers);

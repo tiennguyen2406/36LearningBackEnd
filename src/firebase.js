@@ -4,6 +4,9 @@ import fs from "fs";
 
 dotenv.config();
 
+// Lưu ý: Firebase chỉ được dùng cho Realtime Database
+// Tất cả dữ liệu chính (Users, Courses, Categories, Lessons) đã chuyển sang MongoDB
+
 function loadServiceAccount() {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
@@ -26,7 +29,8 @@ admin.initializeApp({
     "https://app36learning-default-rtdb.asia-southeast1.firebasedatabase.app",
 });
 
-const firestore = admin.firestore();
+// Realtime Database - dùng cho các chức năng realtime (chat, notifications, etc.)
 const realtimeDB = admin.database();
 
-export { firestore, realtimeDB };
+// Export chỉ realtimeDB vì Firestore đã được thay thế bằng MongoDB
+export { realtimeDB };

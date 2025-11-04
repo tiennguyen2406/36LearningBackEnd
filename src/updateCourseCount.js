@@ -1,36 +1,48 @@
-import { firestore } from "./firebase.js";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import Category from "./models/Category.js";
+import Course from "./models/Course.js";
+
+// Lấy đường dẫn thư mục hiện tại
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env từ thư mục root của project
+dotenv.config({ path: join(__dirname, "..", ".env") });
 
 async function updateCourseCount() {
   try {
-    const categoriesSnapshot = await firestore.collection("Categories").get();
-    const categories = categoriesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    // Kết nối MongoDB
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("✅ MongoDB Connected");
+
+    // Lấy tất cả categories
+    const categories = await Category.find();
 
     console.log(`Tìm thấy ${categories.length} danh mục`);
 
+    // Cập nhật courseCount cho từng danh mục
     for (const category of categories) {
-      const coursesCount = await firestore
-        .collection("Courses")
-        .where("category", "==", category.id)
-        .where("isPublished", "==", true)
-        .get()
-        .then((snapshot) => snapshot.size);
-
-      await firestore.collection("Categories").doc(category.id).update({
-        courseCount: coursesCount,
-        updatedAt: new Date(),
+      // Đếm số khóa học thuộc danh mục này
+      const coursesCount = await Course.countDocuments({
+        category: category._id,
+        isPublished: true,
       });
 
-      console.log(
-        `Đã cập nhật danh mục "${category.name}": ${coursesCount} khóa học`
-      );
+      // Cập nhật courseCount trong database
+      category.courseCount = coursesCount;
+      await category.save();
+
+      console.log(`Đã cập nhật danh mục "${category.name}": ${coursesCount} khóa học`);
     }
 
     console.log("Hoàn tất cập nhật courseCount cho tất cả danh mục!");
   } catch (error) {
     console.error("Lỗi khi cập nhật courseCount:", error);
+  } finally {
+    await mongoose.connection.close();
   }
 }
 

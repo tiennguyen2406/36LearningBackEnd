@@ -1,4 +1,7 @@
-import { firestore } from "../firebase.js";
+import User from "../models/User.js";
+import Course from "../models/Course.js";
+import Category from "../models/Category.js";
+import Lesson from "../models/Lesson.js";
 
 // Tạo user mới
 export const createUser = async (req, res) => {
@@ -21,22 +24,35 @@ export const createUser = async (req, res) => {
       return res.status(400).json({ error: "Mật khẩu không hợp lệ! Phải tối thiểu 8 ký tự, bao gồm chữ hoa, chữ thường và số." });
     }
 
-    const userDocRef = data.uid
-      ? firestore.collection("Users").doc(data.uid)
-      : firestore.collection("Users").doc();
-    await userDocRef.set({
+    const userData = {
       email: data.email || "",
       username: data.username || "",
-      password: data.password || "", // thêm password
+      password: data.password || "",
       fullName: data.fullName || "",
       profileImage: data.profileImage || "",
-      createdAt: new Date(),
-      lastLogin: new Date(),
       role: data.role || "student",
       preferences: data.preferences || { language: "vi", darkMode: false, notifications: true },
-    });
-    res.status(201).json({ message: "User created", uid: userDocRef.id });
+    };
+
+    let user;
+    if (data.uid) {
+      // Nếu có uid, tìm và cập nhật hoặc tạo mới
+      user = await User.findByIdAndUpdate(
+        data.uid,
+        userData,
+        { new: true, upsert: true, runValidators: true }
+      );
+    } else {
+      user = await User.create(userData);
+    }
+
+    res.status(201).json({ message: "User created", uid: user._id.toString() });
   } catch (error) {
+    if (error.code === 11000) {
+      // Duplicate key error
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({ error: `${field} đã tồn tại!` });
+    }
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
   }
@@ -44,9 +60,43 @@ export const createUser = async (req, res) => {
 
 export const getUsers = async (req, res) => {
   try {
-    const snapshot = await firestore.collection("Users").get();
-    const users = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
-    res.status(200).json(users);
+    const users = await User.find().select("-password");
+    const usersWithId = users.map(user => ({
+      uid: user._id.toString(),
+      ...user.toObject(),
+      _id: undefined,
+    }));
+    res.status(200).json(usersWithId);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Đăng nhập người dùng (username + password)
+export const loginUser = async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ error: "Missing username or password" });
+    }
+
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    // So sánh mật khẩu đơn giản (hiện đang lưu plaintext). Có thể nâng cấp bcrypt sau.
+    if (user.password !== password) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    return res.status(200).json({
+      message: "Login success",
+      user: { uid: user._id.toString(), ...userObj, _id: undefined },
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
@@ -57,11 +107,11 @@ export const getUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const uid = req.params.id;
-    const userDoc = await firestore.collection("Users").doc(uid).get();
-    if (!userDoc.exists) {
+    const user = await User.findById(uid).select("-password");
+    if (!user) {
       return res.status(404).json({ error: "Không tìm thấy người dùng" });
     }
-    const userData = { uid: userDoc.id, ...userDoc.data() };
+    const userData = { uid: user._id.toString(), ...user.toObject(), _id: undefined };
     res.status(200).json(userData);
   } catch (error) {
     console.error(error);
@@ -76,8 +126,8 @@ export const updateUser = async (req, res) => {
     const data = req.body;
 
     // Kiểm tra user có tồn tại không
-    const userDoc = await firestore.collection("Users").doc(uid).get();
-    if (!userDoc.exists) {
+    const user = await User.findById(uid);
+    if (!user) {
       return res.status(404).json({ error: "Không tìm thấy người dùng" });
     }
 
@@ -95,10 +145,7 @@ export const updateUser = async (req, res) => {
     delete data.username;
 
     // Cập nhật thông tin user
-    await firestore.collection("Users").doc(uid).update({
-      ...data,
-      updatedAt: new Date()
-    });
+    await User.findByIdAndUpdate(uid, data, { new: true, runValidators: true });
     res.status(200).json({ message: "Đã cập nhật thông tin người dùng" });
   } catch (error) {
     console.error(error);
@@ -112,55 +159,32 @@ export const getUserCourses = async (req, res) => {
     const { uid } = req.params;
     if (!uid) return res.status(400).json({ error: "Missing uid" });
 
-    const userSnap = await firestore.collection("Users").doc(uid).get();
-    if (!userSnap.exists) return res.status(404).json({ error: "User not found" });
-    const user = { uid: userSnap.id, ...userSnap.data() };
-    const enrolled = Array.isArray(user.enrolledCourses) ? user.enrolledCourses : [];
+    const user = await User.findById(uid);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
+    const enrolled = Array.isArray(user.enrolledCourses) ? user.enrolledCourses : [];
     if (!enrolled.length) return res.status(200).json([]);
 
-    const coursePromises = enrolled.map((id) => firestore.collection("Courses").doc(id).get());
-    const courseDocs = await Promise.all(coursePromises);
-    
-    // Lấy categoryName và số lượng lessons thực tế cho mỗi course
+    // Lấy courses với populate category
+    const courses = await Course.find({ _id: { $in: enrolled } })
+      .populate("category", "name");
+
+    // Lấy số lượng lessons thực tế cho mỗi course
     const coursesWithCategory = await Promise.all(
-      courseDocs.filter(d => d.exists).map(async (doc) => {
-        const data = doc.data();
-        const courseId = doc.id;
-        let categoryName = undefined;
-        let lessonCount = 0;
-        
-        if (data.category) {
-          try {
-            const categorySnap = await firestore.collection("Categories").doc(data.category).get();
-            if (categorySnap.exists) {
-              categoryName = categorySnap.data().name;
-            }
-          } catch (e) {
-            console.error(`Error fetching category for ${data.category}:`, e);
-          }
-        }
-        
-        // Đếm số lượng lessons thực tế
-        try {
-          const lessonsSnapshot = await firestore
-            .collection("Lessons")
-            .where("courseId", "==", courseId)
-            .get();
-          lessonCount = lessonsSnapshot.size;
-        } catch (e) {
-          console.error(`Error counting lessons for ${courseId}:`, e);
-        }
-        
-        return { 
-          id: courseId, 
-          ...data, 
-          categoryName,
-          totalLessons: lessonCount // Ghi đè totalLessons bằng số thực tế
+      courses.map(async (course) => {
+        const lessonCount = await Lesson.countDocuments({ courseId: course._id });
+        const courseObj = course.toObject();
+        return {
+          id: courseObj._id.toString(),
+          ...courseObj,
+          _id: undefined,
+          categoryName: course.category?.name || undefined,
+          category: course.category?._id.toString(),
+          totalLessons: lessonCount,
         };
       })
     );
-    
+
     return res.status(200).json(coursesWithCategory);
   } catch (error) {
     console.error(error);
@@ -173,27 +197,27 @@ export const enrollCourse = async (req, res) => {
   try {
     const { uid } = req.params;
     const { courseId } = req.body;
-    
+
     if (!uid || !courseId) {
       return res.status(400).json({ error: "Missing uid or courseId" });
     }
 
     // Kiểm tra user có tồn tại không
-    const userRef = firestore.collection("Users").doc(uid);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) {
+    const user = await User.findById(uid);
+    if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
     // Kiểm tra course có tồn tại không
-    const courseDoc = await firestore.collection("Courses").doc(courseId).get();
-    if (!courseDoc.exists) {
+    const course = await Course.findById(courseId);
+    if (!course) {
       return res.status(404).json({ error: "Course not found" });
     }
 
     // Lấy enrolledCourses hiện tại
-    const userData = userDoc.data();
-    const enrolledCourses = Array.isArray(userData.enrolledCourses) ? userData.enrolledCourses : [];
+    const enrolledCourses = Array.isArray(user.enrolledCourses) 
+      ? user.enrolledCourses.map(id => id.toString()) 
+      : [];
 
     // Kiểm tra đã enroll chưa
     if (enrolledCourses.includes(courseId)) {
@@ -201,10 +225,8 @@ export const enrollCourse = async (req, res) => {
     }
 
     // Thêm courseId vào enrolledCourses
-    await userRef.update({
-      enrolledCourses: [...enrolledCourses, courseId],
-      updatedAt: new Date()
-    });
+    user.enrolledCourses.push(courseId);
+    await user.save();
 
     res.status(200).json({ message: "Đã tham gia khóa học thành công" });
   } catch (error) {
@@ -218,21 +240,21 @@ export const unenrollCourse = async (req, res) => {
   try {
     const { uid } = req.params;
     const { courseId } = req.body;
-    
+
     if (!uid || !courseId) {
       return res.status(400).json({ error: "Missing uid or courseId" });
     }
 
     // Kiểm tra user có tồn tại không
-    const userRef = firestore.collection("Users").doc(uid);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) {
+    const user = await User.findById(uid);
+    if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
     // Lấy enrolledCourses hiện tại
-    const userData = userDoc.data();
-    const enrolledCourses = Array.isArray(userData.enrolledCourses) ? userData.enrolledCourses : [];
+    const enrolledCourses = Array.isArray(user.enrolledCourses) 
+      ? user.enrolledCourses.map(id => id.toString()) 
+      : [];
 
     // Kiểm tra user có enroll course này chưa
     if (!enrolledCourses.includes(courseId)) {
@@ -240,11 +262,10 @@ export const unenrollCourse = async (req, res) => {
     }
 
     // Xóa courseId khỏi enrolledCourses
-    const updatedEnrolledCourses = enrolledCourses.filter(id => id !== courseId);
-    await userRef.update({
-      enrolledCourses: updatedEnrolledCourses,
-      updatedAt: new Date()
-    });
+    user.enrolledCourses = user.enrolledCourses.filter(
+      id => id.toString() !== courseId
+    );
+    await user.save();
 
     res.status(200).json({ message: "Đã hủy tham gia khóa học thành công" });
   } catch (error) {
