@@ -81,13 +81,17 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ error: "Missing username or password" });
     }
 
-    const user = await User.findOne({ username });
+    const usernameNorm = String(username).trim();
+    const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const ciRegex = new RegExp(`^${escapeRegExp(usernameNorm)}$`, "i");
+    let user = await User.findOne({ username: ciRegex });
+    console.log(`[login] username=", ${usernameNorm}, " found=", ${!!user}`);
     if (!user) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
     // So sánh mật khẩu đơn giản (hiện đang lưu plaintext). Có thể nâng cấp bcrypt sau.
-    if (user.password !== password) {
+    if (!user.password || user.password !== password) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
@@ -98,8 +102,8 @@ export const loginUser = async (req, res) => {
       user: { uid: user._id.toString(), ...userObj, _id: undefined },
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("Login error:", error);
+    res.status(500).json({ error: error?.message || "Something went wrong" });
   }
 };
 
