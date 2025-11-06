@@ -4,6 +4,7 @@ import {
   getUsers,
   getUserById,
   updateUser,
+  deleteUser,
   getUserCourses,
   enrollCourse,
   unenrollCourse,
@@ -35,5 +36,8 @@ router.get("/:id", getUserById);
 
 // PUT /users/:id -> cập nhật thông tin user
 router.put("/:id", updateUser);
+
+// DELETE /users/:id -> xóa user
+router.delete("/:id", deleteUser);
 
 export default router;

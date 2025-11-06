@@ -55,6 +55,57 @@ export const getCategoryById = async (req, res) => {
   }
 };
 
+// Cập nhật category
+export const updateCategory = async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+    const data = req.body;
+
+    // Kiểm tra category có tồn tại không
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({ error: "Không tìm thấy danh mục" });
+    }
+
+    // Cập nhật thông tin category
+    Object.assign(category, data);
+    await category.save();
+
+    res.status(200).json({ message: "Đã cập nhật danh mục thành công" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Xóa category
+export const deleteCategory = async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+
+    // Kiểm tra category có tồn tại không
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({ error: "Không tìm thấy danh mục" });
+    }
+
+    // Kiểm tra xem có khóa học nào đang sử dụng category này không
+    const coursesCount = await Course.countDocuments({ category: categoryId });
+    if (coursesCount > 0) {
+      return res.status(400).json({ 
+        error: `Không thể xóa danh mục này vì có ${coursesCount} khóa học đang sử dụng` 
+      });
+    }
+
+    // Xóa category
+    await Category.findByIdAndDelete(categoryId);
+    res.status(200).json({ message: "Đã xóa danh mục thành công" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
 // Cập nhật số lượng khóa học cho tất cả danh mục
 export const updateAllCategoryCounts = async (req, res) => {
   try {

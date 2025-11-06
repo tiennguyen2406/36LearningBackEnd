@@ -277,3 +277,23 @@ export const unenrollCourse = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Xóa user
+export const deleteUser = async (req, res) => {
+  try {
+    const uid = req.params.id;
+    
+    // Kiểm tra user có tồn tại không
+    const user = await User.findById(uid);
+    if (!user) {
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    }
+
+    // Xóa user
+    await User.findByIdAndDelete(uid);
+    res.status(200).json({ message: "Đã xóa người dùng thành công" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};

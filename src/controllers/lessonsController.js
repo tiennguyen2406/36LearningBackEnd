@@ -68,3 +68,46 @@ export const getLessonsByCourse = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Cập nhật lesson
+export const updateLesson = async (req, res) => {
+  try {
+    const lessonId = req.params.id;
+    const data = req.body;
+
+    // Kiểm tra lesson có tồn tại không
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) {
+      return res.status(404).json({ error: "Không tìm thấy bài học" });
+    }
+
+    // Cập nhật thông tin lesson
+    Object.assign(lesson, data);
+    await lesson.save();
+
+    res.status(200).json({ message: "Đã cập nhật bài học thành công" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Xóa lesson
+export const deleteLesson = async (req, res) => {
+  try {
+    const lessonId = req.params.id;
+
+    // Kiểm tra lesson có tồn tại không
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) {
+      return res.status(404).json({ error: "Không tìm thấy bài học" });
+    }
+
+    // Xóa lesson
+    await Lesson.findByIdAndDelete(lessonId);
+    res.status(200).json({ message: "Đã xóa bài học thành công" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
