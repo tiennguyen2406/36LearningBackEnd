@@ -4,14 +4,26 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Cấu hình Cloudinary từ CLOUDINARY_URL (hoặc các biến riêng lẻ)
-if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) {
-  cloudinary.v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-    secure: true,
-  });
+// Cấu hình Cloudinary
+// - Nếu có CLOUDINARY_URL: để SDK tự đọc từ env, chỉ set secure=true
+// - Nếu không: dùng bộ CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET
+try {
+  if (process.env.CLOUDINARY_URL) {
+    cloudinary.v2.config({ secure: true });
+  } else if (
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  ) {
+    cloudinary.v2.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+  }
+} catch (e) {
+  console.error("Cloudinary config error:", e);
 }
 
 // Tạo bản ghi minh chứng (đã có link Cloudinary từ client)
@@ -90,8 +102,8 @@ export const uploadProof = async (req, res) => {
     const secureUrl = result.secure_url;
     return res.status(201).json({ url: secureUrl });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Upload failed" });
+    console.error("Upload failed:", error);
+    return res.status(500).json({ error: "Upload failed", message: error?.message || String(error) });
   }
 };
 
