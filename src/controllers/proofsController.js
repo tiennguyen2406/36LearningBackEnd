@@ -1,4 +1,18 @@
 import Proof from "../models/Proof.js";
+import cloudinary from "cloudinary";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// Cấu hình Cloudinary từ CLOUDINARY_URL (hoặc các biến riêng lẻ)
+if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) {
+  cloudinary.v2.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true,
+  });
+}
 
 // Tạo bản ghi minh chứng (đã có link Cloudinary từ client)
 export const createProof = async (req, res) => {
@@ -44,6 +58,40 @@ export const getProofsByUser = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Upload file trực tiếp từ client lên backend, rồi backend đẩy lên Cloudinary
+export const uploadProof = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Missing file" });
+    }
+
+    if (!process.env.CLOUDINARY_URL && !process.env.CLOUDINARY_CLOUD_NAME) {
+      return res.status(500).json({ error: "Cloudinary is not configured" });
+    }
+
+    // Tải buffer tạm thời lên Cloudinary
+    const streamUpload = () =>
+      new Promise((resolve, reject) => {
+        const stream = cloudinary.v2.uploader.upload_stream(
+          { resource_type: "auto" },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        stream.end(req.file.buffer);
+      });
+
+    const result = await streamUpload();
+    // @ts-ignore
+    const secureUrl = result.secure_url;
+    return res.status(201).json({ url: secureUrl });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Upload failed" });
   }
 };
 
