@@ -1,12 +1,11 @@
 import Proof from "../models/Proof.js";
 import cloudinary from "cloudinary";
 import dotenv from "dotenv";
+import User from "../models/User.js";
 
 dotenv.config();
 
 // Cấu hình Cloudinary
-// - Nếu có CLOUDINARY_URL: để SDK tự đọc từ env, chỉ set secure=true
-// - Nếu không: dùng bộ CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET
 try {
   if (process.env.CLOUDINARY_URL) {
     cloudinary.v2.config({ secure: true });
@@ -29,12 +28,19 @@ try {
 // Tạo bản ghi minh chứng (đã có link Cloudinary từ client)
 export const createProof = async (req, res) => {
   try {
-    const { userId, url, type, metadata } = req.body || {};
+    const { userId, url, type, metadata, requestedRole } = req.body || {};
     if (!userId || !url) {
       return res.status(400).json({ error: "Missing userId or url" });
     }
 
-    const proof = await Proof.create({ userId, url, type, metadata });
+    const proof = await Proof.create({
+      userId,
+      url,
+      type,
+      metadata,
+      requestedRole: requestedRole || metadata?.requestedRole || "instructor",
+      status: "pending",
+    });
     return res.status(201).json({
       message: "Proof created",
       id: proof._id.toString(),
@@ -43,9 +49,40 @@ export const createProof = async (req, res) => {
         userId: proof.userId?.toString?.() || String(proof.userId),
         url: proof.url,
         type: proof.type,
+        requestedRole: proof.requestedRole,
+        status: proof.status,
         createdAt: proof.createdAt,
       },
     });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+export const getAllProofs = async (req, res) => {
+  try {
+    const proofs = await Proof.find()
+      .sort({ createdAt: -1 })
+      .populate("userId", "username email fullName role");
+
+    return res.status(200).json(
+      proofs.map((p) => ({
+        id: p._id.toString(),
+        userId: p.userId?._id?.toString?.() || String(p.userId),
+        username: p.userId?.username,
+        email: p.userId?.email,
+        fullName: p.userId?.fullName,
+        currentRole: p.userId?.role,
+        url: p.url,
+        type: p.type,
+        requestedRole: p.requestedRole,
+        status: p.status,
+        adminComment: p.adminComment,
+        createdAt: p.createdAt,
+        metadata: p.metadata,
+      }))
+    );
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Something went wrong" });
@@ -64,6 +101,8 @@ export const getProofsByUser = async (req, res) => {
         userId: p.userId?.toString?.() || String(p.userId),
         url: p.url,
         type: p.type,
+        requestedRole: p.requestedRole,
+        status: p.status,
         createdAt: p.createdAt,
       }))
     );
@@ -104,6 +143,39 @@ export const uploadProof = async (req, res) => {
   } catch (error) {
     console.error("Upload failed:", error);
     return res.status(500).json({ error: "Upload failed", message: error?.message || String(error) });
+  }
+};
+
+export const updateProofStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminComment } = req.body || {};
+
+    if (!id || !status || !["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status or id" });
+    }
+
+    const proof = await Proof.findById(id);
+    if (!proof) {
+      return res.status(404).json({ error: "Proof not found" });
+    }
+
+    proof.status = status;
+    proof.adminComment = adminComment || "";
+    await proof.save();
+
+    if (status === "approved" && proof.requestedRole) {
+      await User.findByIdAndUpdate(
+        proof.userId,
+        { role: proof.requestedRole },
+        { new: true }
+      );
+    }
+
+    return res.status(200).json({ message: "Updated proof", status: proof.status });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Something went wrong" });
   }
 };
 
