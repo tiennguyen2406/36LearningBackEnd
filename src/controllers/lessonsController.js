@@ -3,7 +3,7 @@ import Lesson from "../models/Lesson.js";
 export const createLesson = async (req, res) => {
   try {
     const data = req.body;
-    const lesson = await Lesson.create({
+    const payload = {
       courseId: data.courseId,
       title: data.title,
       description: data.description || "",
@@ -12,7 +12,12 @@ export const createLesson = async (req, res) => {
       order: data.order || 0,
       attachments: data.attachments || [],
       isPreview: data.isPreview ?? false,
-    });
+      kind: data.kind || (data.questions ? "quiz" : "video"),
+    };
+    if (payload.kind === "quiz" && Array.isArray(data.questions)) {
+      payload.questions = data.questions;
+    }
+    const lesson = await Lesson.create(payload);
     res.status(201).json({ message: "Lesson created", id: lesson._id.toString() });
   } catch (error) {
     console.error(error);

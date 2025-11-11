@@ -35,6 +35,30 @@ const lessonSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Loại bài học: video | quiz (mặc định video để tương thích cũ)
+    kind: {
+      type: String,
+      enum: ["video", "quiz"],
+      default: "video",
+    },
+    // Dành cho bài học dạng quiz
+    questions: [
+      {
+        text: { type: String, required: true },
+        options: {
+          type: [String],
+          default: [],
+          validate: {
+            validator: function (arr) {
+              return Array.isArray(arr) && arr.length >= 2;
+            },
+            message: "Mỗi câu hỏi cần ít nhất 2 lựa chọn.",
+          },
+        },
+        correctIndex: { type: Number, required: true, min: 0 },
+        explanation: { type: String, default: "" },
+      },
+    ],
   },
   {
     timestamps: true,

@@ -8,6 +8,7 @@ import coursesRoutes from "./routes/courses.js";
 import categoriesRoutes from "./routes/categories.js";
 import lessonsRoutes from "./routes/lessons.js";
 import proofsRoutes from "./routes/proofs.js";
+import proofCoursesRoutes from "./routes/proofCourses.js";
 import mongoose from "mongoose";
 
 // Lấy đường dẫn thư mục hiện tại
@@ -87,6 +88,7 @@ app.use("/courses", coursesRoutes);
 app.use("/categories", categoriesRoutes);
 app.use("/lessons", lessonsRoutes);
 app.use("/proofs", proofsRoutes);
+app.use("/proof-courses", proofCoursesRoutes);
 
 // Health & root endpoints để kiểm tra nhanh từ thiết bị
 app.get("/health", (req, res) => {

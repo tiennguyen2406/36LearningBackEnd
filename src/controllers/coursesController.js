@@ -34,6 +34,27 @@ export const createCourse = async (req, res) => {
       isPublished: false,
     });
 
+    // Nếu gửi kèm danh sách lessons, tạo hàng loạt
+    if (Array.isArray(data.lessons) && data.lessons.length) {
+      const lessonsPayload = data.lessons
+        .filter(Boolean)
+        .map((l) => ({
+          courseId: course._id,
+          title: l.title,
+          description: l.description || "",
+          videoUrl: l.videoUrl || "",
+          duration: l.duration || 0,
+          order: l.order || 0,
+          attachments: l.attachments || [],
+          isPreview: l.isPreview ?? false,
+          kind: l.kind || (Array.isArray(l.questions) ? "quiz" : "video"),
+          questions: Array.isArray(l.questions) ? l.questions : undefined,
+        }));
+      if (lessonsPayload.length) {
+        await Lesson.insertMany(lessonsPayload);
+      }
+    }
+
     // Cập nhật số lượng khóa học trong danh mục
     if (data.category) {
       await updateCategoryCount(data.category);
