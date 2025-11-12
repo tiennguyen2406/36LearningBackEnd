@@ -79,8 +79,9 @@ export const updateProofCourseStatus = async (req, res) => {
         description: p.description || "",
         category: p.category,
         price: p.price || 0,
-        thumbnailUrl: p.thumbnailUrl || "",
         isPublished: true,
+        instructor: String(pc.userId) || "",
+        imageUrl: p.thumbnailUrl || pc.thumbnailUrl || "",
       });
       // Tạo lessons nếu có
       if (Array.isArray(p.lessons) && p.lessons.length) {
