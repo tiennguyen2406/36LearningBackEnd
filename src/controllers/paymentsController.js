@@ -344,6 +344,101 @@ export const getUserPayments = async (req, res) => {
   }
 };
 
+// Kiểm tra và enroll nếu đã thanh toán (dùng khi webhook không hoạt động)
+export const verifyAndEnroll = async (req, res) => {
+  try {
+    const { orderCode } = req.params;
+    const payosClient = await initPayOS();
+
+    console.log(`=== VERIFY AND ENROLL: ${orderCode} ===`);
+
+    // Tìm payment trong DB
+    const payment = await Payment.findOne({ orderCode: orderCode.toString() });
+    if (!payment) {
+      return res.status(404).json({ error: "Payment not found in database" });
+    }
+
+    console.log("Payment found in DB:", {
+      orderCode: payment.orderCode,
+      status: payment.status,
+      userId: payment.userId,
+      courseId: payment.courseId
+    });
+
+    // Kiểm tra trạng thái thực tế từ PayOS
+    try {
+      console.log("Checking payment status from PayOS...");
+      const paymentInfo = await payosClient.paymentRequests.get(orderCode);
+      console.log("PayOS response:", paymentInfo);
+
+      // Nếu PayOS confirm là PAID
+      if (paymentInfo.status === "PAID" || paymentInfo.status === "paid") {
+        console.log("Payment confirmed as PAID by PayOS");
+
+        // Cập nhật payment status
+        if (payment.status !== "completed") {
+          payment.status = "completed";
+          payment.transactionId = paymentInfo.transactionId || paymentInfo.id || "";
+          payment.metadata = { ...payment.metadata, verified: true, paymentInfo };
+          await payment.save();
+          console.log("Payment status updated to completed");
+        }
+
+        // Enroll user
+        const user = await User.findById(payment.userId);
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        const enrolledCourses = Array.isArray(user.enrolledCourses)
+          ? user.enrolledCourses.map((id) => id.toString())
+          : [];
+
+        if (enrolledCourses.includes(payment.courseId.toString())) {
+          console.log("User already enrolled");
+          return res.status(200).json({ 
+            success: true,
+            message: "User already enrolled in this course",
+            alreadyEnrolled: true
+          });
+        }
+
+        // Thêm course vào enrolledCourses
+        user.enrolledCourses.push(payment.courseId);
+        await user.save();
+        console.log(`✓ User ${user.username} enrolled in course ${payment.courseId}`);
+
+        // Tăng students count
+        await Course.findByIdAndUpdate(payment.courseId, {
+          $inc: { students: 1 },
+        });
+        console.log("✓ Course students count increased");
+
+        return res.status(200).json({
+          success: true,
+          message: "Payment verified and user enrolled successfully",
+          enrolled: true
+        });
+      } else {
+        console.log(`Payment not paid yet. Status: ${paymentInfo.status}`);
+        return res.status(400).json({
+          error: "Payment not completed",
+          status: paymentInfo.status
+        });
+      }
+    } catch (payosError) {
+      console.error("Error checking PayOS:", payosError);
+      return res.status(500).json({ 
+        error: "Cannot verify payment with PayOS",
+        details: payosError.message 
+      });
+    }
+  } catch (error) {
+    console.error("Verify and enroll error:", error);
+    res.status(500).json({ error: "Something went wrong", details: error.message });
+  }
+};
+
 // Hủy payment
 export const cancelPayment = async (req, res) => {
   try {

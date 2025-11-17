@@ -5,6 +5,7 @@ import {
   checkPaymentStatus,
   getUserPayments,
   cancelPayment,
+  verifyAndEnroll,
 } from "../controllers/paymentsController.js";
 
 const router = express.Router();
@@ -35,6 +36,9 @@ router.get("/user/:userId", getUserPayments);
 
 // POST /payments/cancel/:orderCode - Hủy thanh toán
 router.post("/cancel/:orderCode", cancelPayment);
+
+// POST /payments/verify/:orderCode - Kiểm tra và enroll nếu đã thanh toán
+router.post("/verify/:orderCode", verifyAndEnroll);
 
 export default router;
 
