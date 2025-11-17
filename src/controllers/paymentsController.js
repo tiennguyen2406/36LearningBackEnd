@@ -112,15 +112,16 @@ export const createPaymentLink = async (req, res) => {
     });
 
     // Tạo link thanh toán với PayOS
+    // Lưu ý: description tối đa 25 ký tự theo quy định PayOS
     const paymentData = {
       orderCode: orderCode,
       amount: course.price,
-      description: `Thanh toan khoa hoc: ${course.title}`,
+      description: "Thanh toan khoa hoc",  // 21 ký tự - OK!
       returnUrl: `${process.env.FRONTEND_URL || "exp://localhost:8081"}/payment-success`,
       cancelUrl: `${process.env.FRONTEND_URL || "exp://localhost:8081"}/payment-cancel`,
       items: [
         {
-          name: course.title,
+          name: course.title.substring(0, 100),  // Giới hạn độ dài tên khóa học
           quantity: 1,
           price: course.price,
         },
