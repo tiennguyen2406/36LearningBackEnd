@@ -14,9 +14,12 @@ router.post("/create", createPaymentLink);
 
 // GET /payments/webhook - Test endpoint để PayOS kiểm tra webhook URL
 router.get("/webhook", (req, res) => {
+  console.log("GET /payments/webhook - Test request from PayOS");
   res.status(200).json({ 
-    message: "Webhook endpoint is active and ready to receive POST requests",
+    success: true,
+    message: "Webhook endpoint is active and ready",
     status: "ok",
+    methods: ["GET", "POST"],
     timestamp: new Date().toISOString()
   });
 });

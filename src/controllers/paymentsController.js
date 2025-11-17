@@ -114,15 +114,30 @@ export const createPaymentLink = async (req, res) => {
 export const handlePaymentWebhook = async (req, res) => {
   try {
     const webhookData = req.body;
-    console.log("Received webhook from PayOS:", webhookData);
+    console.log("=== WEBHOOK RECEIVED ===");
+    console.log("Headers:", req.headers);
+    console.log("Body:", JSON.stringify(webhookData, null, 2));
 
-    // Xác thực webhook signature (nếu PayOS cung cấp)
-    // TODO: Thêm logic xác thực webhook nếu cần
+    // PayOS có thể gửi test webhook không có data - Chấp nhận để test
+    if (!webhookData || Object.keys(webhookData).length === 0) {
+      console.log("Empty webhook (test request) - returning success");
+      return res.status(200).json({ 
+        success: true, 
+        message: "Webhook endpoint is working",
+        received: true 
+      });
+    }
 
     const { orderCode, code, desc, data } = webhookData;
 
+    // Nếu không có orderCode, có thể là test webhook
     if (!orderCode) {
-      return res.status(400).json({ error: "Missing orderCode" });
+      console.log("No orderCode in webhook - might be test request");
+      return res.status(200).json({ 
+        success: true, 
+        message: "Webhook received but no orderCode",
+        received: true 
+      });
     }
 
     // Tìm payment record
@@ -168,10 +183,20 @@ export const handlePaymentWebhook = async (req, res) => {
       console.log(`Payment ${payment._id} ${payment.status}`);
     }
 
-    res.status(200).json({ message: "Webhook processed" });
+    res.status(200).json({ 
+      success: true,
+      message: "Webhook processed successfully",
+      orderCode: orderCode 
+    });
   } catch (error) {
-    console.error("Handle webhook error:", error);
-    res.status(500).json({ error: "Something went wrong" });
+    console.error("=== WEBHOOK ERROR ===");
+    console.error(error);
+    // Vẫn trả về 200 để PayOS không retry liên tục
+    res.status(200).json({ 
+      success: false,
+      message: "Webhook received with error",
+      error: error.message 
+    });
   }
 };
 
