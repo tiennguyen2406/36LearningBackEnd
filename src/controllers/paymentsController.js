@@ -127,20 +127,9 @@ export const createPaymentLink = async (req, res) => {
       ],
     };
 
-    // PayOS SDK có thể dùng method khác
-    console.log("Calling PayOS to create payment link...");
-    let paymentLinkResponse;
-    
-    if (typeof payosClient.createPaymentLink === 'function') {
-      paymentLinkResponse = await payosClient.createPaymentLink(paymentData);
-    } else if (typeof payosClient.create === 'function') {
-      paymentLinkResponse = await payosClient.create(paymentData);
-    } else if (typeof payosClient.createLink === 'function') {
-      paymentLinkResponse = await payosClient.createLink(paymentData);
-    } else {
-      console.error("Available methods:", Object.keys(payosClient));
-      throw new Error("Cannot find payment link creation method");
-    }
+    // PayOS SDK dùng paymentRequests property
+    console.log("Creating payment link via payosClient.paymentRequests...");
+    const paymentLinkResponse = await payosClient.paymentRequests.create(paymentData);
 
     // Cập nhật payment với URL
     payment.paymentUrl = paymentLinkResponse.checkoutUrl;
@@ -273,7 +262,7 @@ export const checkPaymentStatus = async (req, res) => {
 
     // Có thể gọi API PayOS để kiểm tra trạng thái thực tế
     try {
-      const paymentInfo = await payosClient.getPaymentLinkInformation(orderCode);
+      const paymentInfo = await payosClient.paymentRequests.get(orderCode);
       
       // Cập nhật trạng thái nếu khác
       if (paymentInfo.status === "PAID" && payment.status !== "completed") {
@@ -377,7 +366,7 @@ export const cancelPayment = async (req, res) => {
 
     // Gọi API PayOS để hủy payment link
     try {
-      await payosClient.cancelPaymentLink(orderCode);
+      await payosClient.paymentRequests.cancel(orderCode);
     } catch (payosError) {
       console.log("Error cancelling PayOS link:", payosError.message);
       // Vẫn tiếp tục cập nhật DB
