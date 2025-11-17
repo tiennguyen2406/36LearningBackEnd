@@ -1,4 +1,5 @@
-import PayOS from "@payos/node";
+import pkg from "@payos/node";
+const PayOS = pkg.default || pkg;
 import Payment from "../models/Payment.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
