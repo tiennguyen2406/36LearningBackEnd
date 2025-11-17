@@ -171,11 +171,17 @@ export const handlePaymentWebhook = async (req, res) => {
       });
     }
 
-    const { orderCode, code, desc, data } = webhookData;
+    // PayOS gửi data trong format: { code, desc, success, data: { orderCode, ... } }
+    const { code, desc, data } = webhookData;
+    const orderCode = data?.orderCode || webhookData.orderCode;  // Lấy từ data.orderCode hoặc root
+
+    console.log("Extracted orderCode:", orderCode);
+    console.log("Payment code:", code);
+    console.log("Payment success:", webhookData.success);
 
     // Nếu không có orderCode, có thể là test webhook
     if (!orderCode) {
-      console.log("No orderCode in webhook - might be test request");
+      console.log("No orderCode in webhook - returning success anyway");
       return res.status(200).json({ 
         success: true, 
         message: "Webhook received but no orderCode",
@@ -191,12 +197,16 @@ export const handlePaymentWebhook = async (req, res) => {
     }
 
     // Cập nhật trạng thái payment
-    if (code === "00" || code === 0) {
+    // PayOS gửi code="00" và success=true khi thành công
+    if ((code === "00" || code === 0 || code === "0") && webhookData.success === true) {
+      console.log("✓ Payment successful - Processing...");
+      
       // Thanh toán thành công
       payment.status = "completed";
-      payment.transactionId = data?.transactionId || data?.id || "";
-      payment.metadata = { ...payment.metadata, webhookData };
+      payment.transactionId = data?.reference || data?.transactionId || data?.id || "";
+      payment.metadata = { ...payment.metadata, webhookData, processedAt: new Date() };
       await payment.save();
+      console.log("✓ Payment status updated to completed");
 
       // Tự động enroll user vào khóa học
       const user = await User.findById(payment.userId);
