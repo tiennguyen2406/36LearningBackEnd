@@ -2,22 +2,61 @@ import Payment from "../models/Payment.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
 
-// Dynamic import PayOS để tránh lỗi constructor
-let PayOS;
+// Khởi tạo PayOS - thử nhiều cách import
 let payos;
 
-// Khởi tạo PayOS async
 async function initPayOS() {
-  if (!PayOS) {
+  if (payos) return payos;
+  
+  try {
+    console.log("=== INITIALIZING PAYOS ===");
+    console.log("PAYOS_CLIENT_ID:", process.env.PAYOS_CLIENT_ID ? "✓ Set" : "✗ Missing");
+    console.log("PAYOS_API_KEY:", process.env.PAYOS_API_KEY ? "✓ Set" : "✗ Missing");
+    console.log("PAYOS_CHECKSUM_KEY:", process.env.PAYOS_CHECKSUM_KEY ? "✓ Set" : "✗ Missing");
+    
+    if (!process.env.PAYOS_CLIENT_ID || !process.env.PAYOS_API_KEY || !process.env.PAYOS_CHECKSUM_KEY) {
+      throw new Error("PayOS credentials missing in environment variables");
+    }
+    
     const payosModule = await import("@payos/node");
-    PayOS = payosModule.default;
-    payos = new PayOS(
+    console.log("PayOS module loaded, checking structure...");
+    console.log("Module keys:", Object.keys(payosModule));
+    console.log("Module.default type:", typeof payosModule.default);
+    
+    // Thử các cách lấy constructor
+    let PayOSConstructor = null;
+    
+    if (typeof payosModule.default === 'function') {
+      console.log("✓ Using payosModule.default");
+      PayOSConstructor = payosModule.default;
+    } else if (payosModule.default && typeof payosModule.default.default === 'function') {
+      console.log("✓ Using payosModule.default.default");
+      PayOSConstructor = payosModule.default.default;
+    } else if (typeof payosModule.PayOS === 'function') {
+      console.log("✓ Using payosModule.PayOS");
+      PayOSConstructor = payosModule.PayOS;
+    } else if (typeof payosModule === 'function') {
+      console.log("✓ Using payosModule directly");
+      PayOSConstructor = payosModule;
+    } else {
+      console.error("✗ Cannot find PayOS constructor");
+      console.error("Full module:", payosModule);
+      throw new Error("Cannot find PayOS constructor in module");
+    }
+    
+    console.log("Creating PayOS instance...");
+    payos = new PayOSConstructor(
       process.env.PAYOS_CLIENT_ID,
       process.env.PAYOS_API_KEY,
       process.env.PAYOS_CHECKSUM_KEY
     );
+    
+    console.log("✓ PayOS initialized successfully");
+    return payos;
+  } catch (error) {
+    console.error("✗ Failed to initialize PayOS:", error);
+    throw error;
   }
-  return payos;
 }
 
 // Tạo link thanh toán cho khóa học
