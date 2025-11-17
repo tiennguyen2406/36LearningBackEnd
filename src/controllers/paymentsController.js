@@ -52,6 +52,7 @@ async function initPayOS() {
     );
     
     console.log("✓ PayOS initialized successfully");
+    console.log("Available methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(payos)));
     return payos;
   } catch (error) {
     console.error("✗ Failed to initialize PayOS:", error);
@@ -126,7 +127,20 @@ export const createPaymentLink = async (req, res) => {
       ],
     };
 
-    const paymentLinkResponse = await payosClient.createPaymentLink(paymentData);
+    // PayOS SDK có thể dùng method khác
+    console.log("Calling PayOS to create payment link...");
+    let paymentLinkResponse;
+    
+    if (typeof payosClient.createPaymentLink === 'function') {
+      paymentLinkResponse = await payosClient.createPaymentLink(paymentData);
+    } else if (typeof payosClient.create === 'function') {
+      paymentLinkResponse = await payosClient.create(paymentData);
+    } else if (typeof payosClient.createLink === 'function') {
+      paymentLinkResponse = await payosClient.createLink(paymentData);
+    } else {
+      console.error("Available methods:", Object.keys(payosClient));
+      throw new Error("Cannot find payment link creation method");
+    }
 
     // Cập nhật payment với URL
     payment.paymentUrl = paymentLinkResponse.checkoutUrl;
