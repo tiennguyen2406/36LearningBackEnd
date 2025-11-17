@@ -1,19 +1,29 @@
-import pkg from "@payos/node";
-const PayOS = pkg.default || pkg;
 import Payment from "../models/Payment.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
 
-// Khởi tạo PayOS với credentials từ env
-const payos = new PayOS(
-  process.env.PAYOS_CLIENT_ID,
-  process.env.PAYOS_API_KEY,
-  process.env.PAYOS_CHECKSUM_KEY
-);
+// Dynamic import PayOS để tránh lỗi constructor
+let PayOS;
+let payos;
+
+// Khởi tạo PayOS async
+async function initPayOS() {
+  if (!PayOS) {
+    const payosModule = await import("@payos/node");
+    PayOS = payosModule.default;
+    payos = new PayOS(
+      process.env.PAYOS_CLIENT_ID,
+      process.env.PAYOS_API_KEY,
+      process.env.PAYOS_CHECKSUM_KEY
+    );
+  }
+  return payos;
+}
 
 // Tạo link thanh toán cho khóa học
 export const createPaymentLink = async (req, res) => {
   try {
+    const payosClient = await initPayOS();
     const { userId, courseId } = req.body;
 
     if (!userId || !courseId) {
@@ -77,7 +87,7 @@ export const createPaymentLink = async (req, res) => {
       ],
     };
 
-    const paymentLinkResponse = await payos.createPaymentLink(paymentData);
+    const paymentLinkResponse = await payosClient.createPaymentLink(paymentData);
 
     // Cập nhật payment với URL
     payment.paymentUrl = paymentLinkResponse.checkoutUrl;
@@ -168,6 +178,7 @@ export const handlePaymentWebhook = async (req, res) => {
 // Kiểm tra trạng thái thanh toán
 export const checkPaymentStatus = async (req, res) => {
   try {
+    const payosClient = await initPayOS();
     const { orderCode } = req.params;
 
     if (!orderCode) {
@@ -184,7 +195,7 @@ export const checkPaymentStatus = async (req, res) => {
 
     // Có thể gọi API PayOS để kiểm tra trạng thái thực tế
     try {
-      const paymentInfo = await payos.getPaymentLinkInformation(orderCode);
+      const paymentInfo = await payosClient.getPaymentLinkInformation(orderCode);
       
       // Cập nhật trạng thái nếu khác
       if (paymentInfo.status === "PAID" && payment.status !== "completed") {
@@ -268,6 +279,7 @@ export const getUserPayments = async (req, res) => {
 // Hủy payment
 export const cancelPayment = async (req, res) => {
   try {
+    const payosClient = await initPayOS();
     const { orderCode } = req.params;
 
     if (!orderCode) {
@@ -287,7 +299,7 @@ export const cancelPayment = async (req, res) => {
 
     // Gọi API PayOS để hủy payment link
     try {
-      await payos.cancelPaymentLink(orderCode);
+      await payosClient.cancelPaymentLink(orderCode);
     } catch (payosError) {
       console.log("Error cancelling PayOS link:", payosError.message);
       // Vẫn tiếp tục cập nhật DB
