@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import Course from "../models/Course.js";
 import Category from "../models/Category.js";
 import Lesson from "../models/Lesson.js";
+import Payment from "../models/Payment.js";
 
 // Tạo user mới
 export const createUser = async (req, res) => {
@@ -228,9 +229,34 @@ export const enrollCourse = async (req, res) => {
       return res.status(200).json({ message: "User đã tham gia khóa học này rồi" });
     }
 
-    // Thêm courseId vào enrolledCourses
+    // Kiểm tra xem khóa học có phải trả phí không
+    if (course.price && course.price > 0) {
+      // Khóa học có phí - Kiểm tra đã thanh toán chưa
+      const completedPayment = await Payment.findOne({
+        userId: uid,
+        courseId: courseId,
+        status: "completed",
+      });
+
+      if (!completedPayment) {
+        return res.status(402).json({ 
+          error: "Khóa học này yêu cầu thanh toán",
+          requiresPayment: true,
+          price: course.price,
+        });
+      }
+    }
+
+    // Khóa học miễn phí hoặc đã thanh toán - Cho phép enroll
     user.enrolledCourses.push(courseId);
     await user.save();
+
+    // Tăng số lượng học viên nếu chưa tăng (từ payment)
+    if (!course.price || course.price <= 0) {
+      await Course.findByIdAndUpdate(courseId, {
+        $inc: { students: 1 },
+      });
+    }
 
     res.status(200).json({ message: "Đã tham gia khóa học thành công" });
   } catch (error) {

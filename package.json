@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "seed": "node seedSampleData.js"
+    "seed": "node seedSampleData.js",
+    "setup-payos": "node setup-payos.js",
+    "setup-payment-indexes": "node src/setupPaymentIndexes.js",
+    "migrate-course-price": "node src/migrateCoursePrice.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@payos/node": "^2.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

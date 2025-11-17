@@ -10,6 +10,7 @@ import lessonsRoutes from "./routes/lessons.js";
 import proofsRoutes from "./routes/proofs.js";
 import proofCoursesRoutes from "./routes/proofCourses.js";
 import quizResultsRoutes from "./routes/quizResults.js";
+import paymentsRoutes from "./routes/payments.js";
 import mongoose from "mongoose";
 
 // Lấy đường dẫn thư mục hiện tại
@@ -49,11 +50,17 @@ mongoose
     process.exit(1);
   });
 
-// CORS
+// CORS - Cho phép webhook từ PayOS (server-to-server không có origin)
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Cho phép tất cả origin khi bật CORS_ALLOW_ALL để debug trên thiết bị thật
+      // QUAN TRỌNG: Webhook từ PayOS gửi từ server, không có origin header
+      // Phải cho phép requests không có origin
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Cho phép tất cả origin khi bật CORS_ALLOW_ALL
       if (String(process.env.CORS_ALLOW_ALL || "").toLowerCase() === "true") {
         return callback(null, true);
       }
@@ -69,13 +76,15 @@ app.use(
         .map((s) => s.trim())
         .filter(Boolean);
       const allowlist = new Set([...defaultOrigins, ...envOrigins]);
-      // Hỗ trợ mạng nội bộ: 192.168.x.x, 10.x.x.x, 172.16-31.x.x và http/https
+
+      // Hỗ trợ mạng nội bộ: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
       const lanRegex =
         /^(http|https):\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)[0-9\.]+/;
-      if (!origin) return callback(null, true);
+
       if (allowlist.has(origin) || lanRegex.test(origin)) {
         return callback(null, true);
       }
+
       return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -91,6 +100,7 @@ app.use("/lessons", lessonsRoutes);
 app.use("/proofs", proofsRoutes);
 app.use("/proof-courses", proofCoursesRoutes);
 app.use("/quiz-results", quizResultsRoutes);
+app.use("/payments", paymentsRoutes);
 
 // Health & root endpoints để kiểm tra nhanh từ thiết bị
 app.get("/health", (req, res) => {
