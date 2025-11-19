@@ -75,6 +75,7 @@ app.use(
         "http://localhost:19006",
         "http://localhost:8083",
         "http://127.0.0.1:8083",
+        "http://127.0.0.1:8081",
       ];
       const envOrigins = (process.env.ALLOWED_ORIGINS || "")
         .split(",")
@@ -87,14 +88,19 @@ app.use(
         /^(http|https):\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)[0-9\.]+/;
 
       if (allowlist.has(origin) || lanRegex.test(origin)) {
+        console.log(`✅ CORS: Cho phép origin: ${origin}`);
         return callback(null, true);
       }
 
+      console.warn(`⚠️ CORS: Từ chối origin: ${origin}`);
       return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    exposedHeaders: ["Content-Type"],
     credentials: false,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   })
 );
 
