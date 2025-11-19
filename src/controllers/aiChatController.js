@@ -61,20 +61,68 @@ async function getDatabaseContext() {
   }
 }
 
+function normalizeText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+}
+
+async function buildSelectedCourseContext(selectedCourseId, currentUserId) {
+  if (!selectedCourseId) return null;
+
+  const course = await Course.findById(selectedCourseId).lean();
+  if (!course) {
+    throw new Error("Khóa học được chọn không tồn tại");
+  }
+
+  if (currentUserId) {
+    const user = await User.findById(currentUserId).lean();
+    const enrolled = Array.isArray(user?.enrolledCourses)
+      ? user.enrolledCourses.map((id) => id.toString())
+      : [];
+    if (!enrolled.includes(String(selectedCourseId))) {
+      throw new Error("Bạn chưa tham gia khóa học này nên không thể lấy nội dung chi tiết");
+    }
+  }
+
+  const lessons = await Lesson.find({ courseId: selectedCourseId })
+    .sort({ order: 1 })
+    .limit(30)
+    .lean();
+
+  const lessonHighlights = lessons.slice(0, 8).map((lesson, index) => {
+    const kindLabel = lesson.kind === "quiz" ? "Quiz" : "Bài học";
+    return `${index + 1}. ${lesson.title} (${kindLabel})`;
+  });
+
+  return {
+    id: course._id.toString(),
+    title: course.title,
+    description: course.description,
+    instructor: course.instructor,
+    students: course.students,
+    price: course.price,
+    totalLessons: course.totalLessons,
+    lessons: lessonHighlights,
+  };
+}
+
 // Chat với AI
 export const chatWithAI = async (req, res) => {
   // Khai báo các biến ở đầu function để có thể dùng trong catch block
   // Model names hợp lệ cho API v1beta (gemini-pro đã không còn được hỗ trợ):
-  // - gemini-1.5-flash (nhanh, miễn phí)
-  // - gemini-1.5-pro (mạnh hơn)
-  // - gemini-1.5-flash-latest (bản mới nhất)
-  // - gemini-1.5-pro-latest (bản mới nhất)
+  // - gemini-2.5-flash (ưu tiên nếu sẵn sàng)
+  // - gemini-1.5-flash-latest
+  // - gemini-1.5-pro
+  // - gemini-1.5-pro-latest
   let modelName = "gemini-2.5-flash";
   const modelNames = [
     "gemini-2.5-flash",
-    "gemini-1.5-flash-latest", 
+    "gemini-1.5-flash-latest",
     "gemini-1.5-pro",
-    "gemini-1.5-pro-latest"
+    "gemini-1.5-pro-latest",
   ];
   
   try {
@@ -89,18 +137,88 @@ export const chatWithAI = async (req, res) => {
     // Log để debug
     console.log(`🔑 GEMINI_API_KEY: ${GEMINI_API_KEY.substring(0, 10)}... (${GEMINI_API_KEY.length} ký tự)`);
 
-    const { message, conversationHistory = [] } = req.body;
+    const {
+      message,
+      conversationHistory = [],
+      selectedCourseId,
+      currentUserId,
+    } = req.body;
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return res.status(400).json({ error: "Message is required" });
     }
 
+    const allowedKeywords = [
+      "khoa",
+      "hoc",
+      "course",
+      "bai",
+      "lesson",
+      "mentor",
+      "giang",
+      "gia",
+      "price",
+      "danh muc",
+      "chu de",
+      "quiz",
+      "thi",
+      "dang ky",
+      "enroll",
+      "hoc phi",
+      "thanh toan",
+      "video",
+      "giang vien",
+      "tai lieu",
+      "cap nhat",
+      "module",
+      "lien he",
+    ];
+
+    const normalizedMessage = normalizeText(message);
+    const isRelevantQuestion = allowedKeywords.some((keyword) =>
+      normalizedMessage.includes(keyword)
+    );
+
+    if (!isRelevantQuestion && !selectedCourseId) {
+      return res.status(200).json({
+        response:
+          "Xin lỗi, trợ lý AI 36Learning chỉ hỗ trợ các câu hỏi liên quan đến khóa học, bài học, danh mục và hoạt động trên nền tảng. Bạn vui lòng đặt câu hỏi phù hợp hơn nhé!",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     // Lấy context từ database
     const dbContext = await getDatabaseContext();
-
     const contextText = dbContext
       ? JSON.stringify(dbContext, null, 2)
       : "Không thể tải dữ liệu từ database. Chỉ trả lời dựa trên kiến thức chung và thông tin người dùng cung cấp.";
+
+    let selectedCourseContext = "";
+    if (selectedCourseId) {
+      try {
+        const courseContext = await buildSelectedCourseContext(
+          selectedCourseId,
+          currentUserId
+        );
+        selectedCourseContext = courseContext
+          ? `
+Khóa học đang tập trung:
+- Tên: ${courseContext.title}
+- Giảng viên: ${courseContext.instructor || "Chưa cập nhật"}
+- Số học viên: ${courseContext.students || 0}
+- Giá: ${courseContext.price ? `${courseContext.price} VND` : "Miễn phí"}
+- Tổng số bài: ${courseContext.totalLessons || "Chưa rõ"}
+- Mô tả: ${courseContext.description || "Chưa có mô tả chi tiết"}
+- Bài học tiêu biểu:
+${courseContext.lessons.join("\n") || "Chưa có bài học"}
+`
+          : "";
+      } catch (courseError) {
+        return res.status(403).json({
+          error: courseError.message,
+        });
+      }
+    }
 
     // Tạo system prompt với thông tin database và hướng dẫn chi tiết
     const systemPrompt = `Bạn là trợ lý AI logic cho nền tảng học trực tuyến 36Learning.
@@ -117,6 +235,11 @@ Phạm vi kiến thức trong database:
 - Danh mục: tên, mô tả, số lượng khóa học.
 - Người dùng: username, fullName, role, email (không tiết lộ dữ liệu nhạy cảm).
 - Bài học: tiêu đề, loại bài học, thuộc khóa học nào.
+- Nếu câu hỏi không liên quan đến việc học hoặc nền tảng 36Learning, hãy trả lời duy nhất: "Xin lỗi, trợ lý AI 36Learning chỉ hỗ trợ các câu hỏi liên quan đến học tập và hoạt động trên nền tảng."
+- Nếu người dùng đã chọn khóa học cụ thể, hãy đào sâu vào nội dung khóa học đó, cung cấp nhận xét chi tiết, đồng thời đề xuất 2-3 câu hỏi tiếp theo mà người dùng có thể quan tâm để nghiên cứu sâu hơn.
+
+Dữ liệu khóa học được chọn (nếu có):
+${selectedCourseContext || "Người dùng chưa chọn khóa học cụ thể."}
 
 Dữ liệu hiện tại:
 ${contextText}
