@@ -63,6 +63,9 @@ async function getDatabaseContext() {
 
 // Chat với AI
 export const chatWithAI = async (req, res) => {
+  // Khai báo modelName ở đầu function để có thể dùng trong catch block
+  let modelName = "gemini-1.5-flash";
+  
   try {
     // Kiểm tra API key
     if (!genAI || !GEMINI_API_KEY) {
@@ -99,7 +102,6 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
 
     // Sử dụng model gemini-1.5-flash (model mới, nhanh, miễn phí)
     // Model names hợp lệ: gemini-1.5-flash, gemini-1.5-pro, gemini-pro
-    let modelName = "gemini-1.5-flash";
     console.log(`🔧 Đang sử dụng model: ${modelName}`);
     let model;
     try {
