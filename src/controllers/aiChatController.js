@@ -99,7 +99,7 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
 
     // Sử dụng model gemini-1.5-flash (model mới, nhanh, miễn phí)
     // Model names hợp lệ: gemini-1.5-flash, gemini-1.5-pro, gemini-pro
-    const modelName = "gemini-1.5-flash";
+    let modelName = "gemini-1.5-flash";
     console.log(`🔧 Đang sử dụng model: ${modelName}`);
     let model;
     try {
@@ -111,6 +111,7 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
       console.log(`🔄 Thử model dự phòng: ${fallbackModel}`);
       try {
         model = genAI.getGenerativeModel({ model: fallbackModel });
+        modelName = fallbackModel; // Cập nhật modelName để dùng trong error message
         console.log(`✅ Đã chuyển sang model: ${fallbackModel}`);
       } catch (fallbackError) {
         throw new Error(`Không thể khởi tạo model. Đã thử ${modelName} và ${fallbackModel}. Lỗi: ${fallbackError.message}`);

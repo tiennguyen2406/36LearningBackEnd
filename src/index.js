@@ -122,6 +122,15 @@ app.get("/", (req, res) => {
   res.status(200).send("36Learning Backend is running");
 });
 
+// Error handler middleware - phải đặt sau tất cả routes
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err);
+  res.status(err.status || 500).json({
+    error: err.message || "Internal Server Error",
+    details: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
+});
+
 const PORT = process.env.PORT || 4000;
 const HOST = process.env.HOST || "0.0.0.0"; // bind tất cả interfaces để thiết bị cùng mạng truy cập
 app.listen(PORT, HOST, () =>
