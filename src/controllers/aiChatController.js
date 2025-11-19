@@ -63,8 +63,9 @@ async function getDatabaseContext() {
 
 // Chat với AI
 export const chatWithAI = async (req, res) => {
-  // Khai báo modelName ở đầu function để có thể dùng trong catch block
+  // Khai báo các biến ở đầu function để có thể dùng trong catch block
   let modelName = "gemini-1.5-flash";
+  const modelNames = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
   
   try {
     // Kiểm tra API key
@@ -101,7 +102,6 @@ ${JSON.stringify(dbContext, null, 2)}
 Hãy sử dụng thông tin này để trả lời câu hỏi của người dùng một cách chính xác.`;
 
     // Thử các model theo thứ tự: gemini-1.5-flash -> gemini-1.5-pro -> gemini-pro
-    const modelNames = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
     let model = null;
     let lastError = null;
     
