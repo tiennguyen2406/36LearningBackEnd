@@ -16,6 +16,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@payos/node": "^2.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",

@@ -11,6 +11,7 @@ import proofsRoutes from "./routes/proofs.js";
 import proofCoursesRoutes from "./routes/proofCourses.js";
 import quizResultsRoutes from "./routes/quizResults.js";
 import paymentsRoutes from "./routes/payments.js";
+import aiChatRoutes from "./routes/aiChat.js";
 import mongoose from "mongoose";
 
 // Lấy đường dẫn thư mục hiện tại
@@ -101,6 +102,7 @@ app.use("/proofs", proofsRoutes);
 app.use("/proof-courses", proofCoursesRoutes);
 app.use("/quiz-results", quizResultsRoutes);
 app.use("/payments", paymentsRoutes);
+app.use("/ai-chat", aiChatRoutes);
 
 // Health & root endpoints để kiểm tra nhanh từ thiết bị
 app.get("/health", (req, res) => {
