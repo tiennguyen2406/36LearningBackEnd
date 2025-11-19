@@ -5,7 +5,13 @@ import User from "../models/User.js";
 import Lesson from "../models/Lesson.js";
 
 // Khởi tạo Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+
+if (!GEMINI_API_KEY) {
+  console.warn("⚠️ GEMINI_API_KEY chưa được cấu hình trong biến môi trường");
+}
+
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // Hàm lấy thông tin database để cung cấp context cho AI
 async function getDatabaseContext() {
@@ -58,6 +64,14 @@ async function getDatabaseContext() {
 // Chat với AI
 export const chatWithAI = async (req, res) => {
   try {
+    // Kiểm tra API key
+    if (!genAI || !GEMINI_API_KEY) {
+      return res.status(500).json({
+        error: "GEMINI_API_KEY chưa được cấu hình",
+        details: "Vui lòng thêm GEMINI_API_KEY vào file .env",
+      });
+    }
+
     const { message, conversationHistory = [] } = req.body;
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -83,8 +97,25 @@ ${JSON.stringify(dbContext, null, 2)}
 
 Hãy sử dụng thông tin này để trả lời câu hỏi của người dùng một cách chính xác.`;
 
-    // Lấy model
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    // Sử dụng model gemini-1.5-flash (model mới, nhanh, miễn phí)
+    // Model names hợp lệ: gemini-1.5-flash, gemini-1.5-pro, gemini-pro
+    const modelName = "gemini-1.5-flash";
+    console.log(`🔧 Đang sử dụng model: ${modelName}`);
+    let model;
+    try {
+      model = genAI.getGenerativeModel({ model: modelName });
+    } catch (modelInitError) {
+      console.error(`❌ Không thể khởi tạo model ${modelName}:`, modelInitError.message);
+      // Thử model dự phòng
+      const fallbackModel = "gemini-1.5-pro";
+      console.log(`🔄 Thử model dự phòng: ${fallbackModel}`);
+      try {
+        model = genAI.getGenerativeModel({ model: fallbackModel });
+        console.log(`✅ Đã chuyển sang model: ${fallbackModel}`);
+      } catch (fallbackError) {
+        throw new Error(`Không thể khởi tạo model. Đã thử ${modelName} và ${fallbackModel}. Lỗi: ${fallbackError.message}`);
+      }
+    }
 
     // Tạo lịch sử hội thoại
     const history = conversationHistory.map((msg) => ({
@@ -118,9 +149,28 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
     });
   } catch (error) {
     console.error("Error in chatWithAI:", error);
+    
+    // Xử lý lỗi cụ thể từ Google Generative AI
+    let errorMessage = "Lỗi khi xử lý yêu cầu AI";
+    let errorDetails = error.message;
+
+    if (error.message && error.message.includes("403")) {
+      errorMessage = "API Key không hợp lệ hoặc không có quyền truy cập";
+      errorDetails = "Vui lòng kiểm tra GEMINI_API_KEY trong file .env. Đảm bảo API key hợp lệ và đã được kích hoạt trong Google AI Studio.";
+    } else if (error.message && error.message.includes("401")) {
+      errorMessage = "API Key không hợp lệ";
+      errorDetails = "GEMINI_API_KEY không đúng. Vui lòng kiểm tra lại.";
+    } else if (error.message && error.message.includes("404")) {
+      errorMessage = "Model không tìm thấy";
+      errorDetails = `Model "${modelName}" không khả dụng. Có thể model name không đúng hoặc API đã thay đổi. Vui lòng kiểm tra lại model name hoặc thử model khác.`;
+    } else if (error.message && error.message.includes("429")) {
+      errorMessage = "Đã vượt quá giới hạn API";
+      errorDetails = "Vui lòng thử lại sau.";
+    }
+
     res.status(500).json({
-      error: "Lỗi khi xử lý yêu cầu AI",
-      details: error.message,
+      error: errorMessage,
+      details: errorDetails,
     });
   }
 };

@@ -26,6 +26,10 @@ console.log(
   "🔍 MONGO_URI:",
   process.env.MONGO_URI ? "✅ Đã load" : "❌ Chưa load"
 );
+console.log(
+  "🔍 GEMINI_API_KEY:",
+  process.env.GEMINI_API_KEY ? "✅ Đã load" : "❌ Chưa load"
+);
 
 const app = express();
 app.use(express.json());
