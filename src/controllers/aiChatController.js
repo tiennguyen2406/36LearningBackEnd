@@ -100,24 +100,27 @@ ${JSON.stringify(dbContext, null, 2)}
 
 Hãy sử dụng thông tin này để trả lời câu hỏi của người dùng một cách chính xác.`;
 
-    // Sử dụng model gemini-1.5-flash (model mới, nhanh, miễn phí)
-    // Model names hợp lệ: gemini-1.5-flash, gemini-1.5-pro, gemini-pro
-    console.log(`🔧 Đang sử dụng model: ${modelName}`);
-    let model;
-    try {
-      model = genAI.getGenerativeModel({ model: modelName });
-    } catch (modelInitError) {
-      console.error(`❌ Không thể khởi tạo model ${modelName}:`, modelInitError.message);
-      // Thử model dự phòng
-      const fallbackModel = "gemini-1.5-pro";
-      console.log(`🔄 Thử model dự phòng: ${fallbackModel}`);
+    // Thử các model theo thứ tự: gemini-1.5-flash -> gemini-1.5-pro -> gemini-pro
+    const modelNames = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+    let model = null;
+    let lastError = null;
+    
+    for (const testModelName of modelNames) {
       try {
-        model = genAI.getGenerativeModel({ model: fallbackModel });
-        modelName = fallbackModel; // Cập nhật modelName để dùng trong error message
-        console.log(`✅ Đã chuyển sang model: ${fallbackModel}`);
-      } catch (fallbackError) {
-        throw new Error(`Không thể khởi tạo model. Đã thử ${modelName} và ${fallbackModel}. Lỗi: ${fallbackError.message}`);
+        console.log(`🔧 Đang thử model: ${testModelName}`);
+        model = genAI.getGenerativeModel({ model: testModelName });
+        modelName = testModelName; // Cập nhật modelName đã dùng thành công
+        console.log(`✅ Đã chọn model: ${testModelName}`);
+        break;
+      } catch (modelError) {
+        console.warn(`⚠️ Model ${testModelName} không khả dụng:`, modelError.message);
+        lastError = modelError;
+        continue;
       }
+    }
+    
+    if (!model) {
+      throw new Error(`Không thể khởi tạo model. Đã thử: ${modelNames.join(", ")}. Lỗi cuối: ${lastError?.message || "Unknown error"}`);
     }
 
     // Tạo lịch sử hội thoại
@@ -142,7 +145,51 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
     });
 
     // Gửi tin nhắn
-    const result = await chat.sendMessage(message);
+    let result;
+    try {
+      result = await chat.sendMessage(message);
+    } catch (sendError) {
+      // Nếu lỗi khi gửi tin nhắn (có thể do model không khả dụng), thử model khác
+      console.error(`❌ Lỗi khi gửi tin nhắn với model ${modelName}:`, sendError.message);
+      
+      // Thử lại với model khác nếu chưa thử hết
+      const remainingModels = modelNames.filter(m => m !== modelName);
+      let retrySuccess = false;
+      
+      for (const retryModelName of remainingModels) {
+        try {
+          console.log(`🔄 Thử lại với model: ${retryModelName}`);
+          const retryModel = genAI.getGenerativeModel({ model: retryModelName });
+          const retryChat = retryModel.startChat({
+            history: [
+              {
+                role: "user",
+                parts: [{ text: systemPrompt }],
+              },
+              {
+                role: "model",
+                parts: [{ text: "Tôi đã hiểu. Tôi là trợ lý AI của 36Learning và có quyền truy cập vào cơ sở dữ liệu. Tôi sẵn sàng trả lời các câu hỏi của bạn." }],
+              },
+              ...history,
+            ],
+          });
+          
+          result = await retryChat.sendMessage(message);
+          modelName = retryModelName;
+          console.log(`✅ Thành công với model: ${retryModelName}`);
+          retrySuccess = true;
+          break;
+        } catch (retryError) {
+          console.warn(`⚠️ Model ${retryModelName} cũng không hoạt động:`, retryError.message);
+          continue;
+        }
+      }
+      
+      if (!retrySuccess) {
+        throw sendError; // Ném lỗi ban đầu nếu không model nào hoạt động
+      }
+    }
+    
     const response = await result.response;
     const text = response.text();
 
@@ -165,7 +212,7 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
       errorDetails = "GEMINI_API_KEY không đúng. Vui lòng kiểm tra lại.";
     } else if (error.message && error.message.includes("404")) {
       errorMessage = "Model không tìm thấy";
-      errorDetails = `Model "${modelName}" không khả dụng. Có thể model name không đúng hoặc API đã thay đổi. Vui lòng kiểm tra lại model name hoặc thử model khác.`;
+      errorDetails = `Model "${modelName}" không khả dụng. Đã thử các model: ${modelNames.join(", ")}. Có thể API key không có quyền truy cập các model này hoặc model names đã thay đổi.`;
     } else if (error.message && error.message.includes("429")) {
       errorMessage = "Đã vượt quá giới hạn API";
       errorDetails = "Vui lòng thử lại sau.";
