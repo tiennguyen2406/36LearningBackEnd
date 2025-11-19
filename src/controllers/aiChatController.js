@@ -64,8 +64,18 @@ async function getDatabaseContext() {
 // Chat với AI
 export const chatWithAI = async (req, res) => {
   // Khai báo các biến ở đầu function để có thể dùng trong catch block
-  let modelName = "gemini-1.5-flash";
-  const modelNames = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+  // Model names hợp lệ cho API v1beta (gemini-pro đã không còn được hỗ trợ):
+  // - gemini-1.5-flash (nhanh, miễn phí)
+  // - gemini-1.5-pro (mạnh hơn)
+  // - gemini-1.5-flash-latest (bản mới nhất)
+  // - gemini-1.5-pro-latest (bản mới nhất)
+  let modelName = "gemini-2.5-flash";
+  const modelNames = [
+    "gemini-2.5-flash",
+    "gemini-1.5-flash-latest", 
+    "gemini-1.5-pro",
+    "gemini-1.5-pro-latest"
+  ];
   
   try {
     // Kiểm tra API key
@@ -75,6 +85,9 @@ export const chatWithAI = async (req, res) => {
         details: "Vui lòng thêm GEMINI_API_KEY vào file .env",
       });
     }
+    
+    // Log để debug
+    console.log(`🔑 GEMINI_API_KEY: ${GEMINI_API_KEY.substring(0, 10)}... (${GEMINI_API_KEY.length} ký tự)`);
 
     const { message, conversationHistory = [] } = req.body;
 
@@ -101,7 +114,7 @@ ${JSON.stringify(dbContext, null, 2)}
 
 Hãy sử dụng thông tin này để trả lời câu hỏi của người dùng một cách chính xác.`;
 
-    // Thử các model theo thứ tự: gemini-1.5-flash -> gemini-1.5-pro -> gemini-pro
+    // Thử các model theo thứ tự (gemini-pro đã không còn được hỗ trợ)
     let model = null;
     let lastError = null;
     
@@ -109,18 +122,25 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
       try {
         console.log(`🔧 Đang thử model: ${testModelName}`);
         model = genAI.getGenerativeModel({ model: testModelName });
+        // Model đã được khởi tạo thành công
         modelName = testModelName; // Cập nhật modelName đã dùng thành công
         console.log(`✅ Đã chọn model: ${testModelName}`);
         break;
       } catch (modelError) {
         console.warn(`⚠️ Model ${testModelName} không khả dụng:`, modelError.message);
+        console.warn(`   Chi tiết lỗi:`, JSON.stringify(modelError, null, 2));
         lastError = modelError;
         continue;
       }
     }
     
     if (!model) {
-      throw new Error(`Không thể khởi tạo model. Đã thử: ${modelNames.join(", ")}. Lỗi cuối: ${lastError?.message || "Unknown error"}`);
+      const errorMsg = lastError?.message || "Unknown error";
+      const errorStack = lastError?.stack || "";
+      console.error(`❌ Không thể khởi tạo model. Đã thử: ${modelNames.join(", ")}`);
+      console.error(`   Lỗi cuối: ${errorMsg}`);
+      console.error(`   Stack: ${errorStack}`);
+      throw new Error(`Không thể khởi tạo model. Đã thử: ${modelNames.join(", ")}. Lỗi: ${errorMsg}`);
     }
 
     // Tạo lịch sử hội thoại
@@ -147,10 +167,13 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
     // Gửi tin nhắn
     let result;
     try {
+      console.log(`📤 Đang gửi tin nhắn với model: ${modelName}`);
       result = await chat.sendMessage(message);
+      console.log(`✅ Đã nhận phản hồi từ model: ${modelName}`);
     } catch (sendError) {
       // Nếu lỗi khi gửi tin nhắn (có thể do model không khả dụng), thử model khác
       console.error(`❌ Lỗi khi gửi tin nhắn với model ${modelName}:`, sendError.message);
+      console.error(`   Chi tiết lỗi:`, sendError);
       
       // Thử lại với model khác nếu chưa thử hết
       const remainingModels = modelNames.filter(m => m !== modelName);
@@ -181,17 +204,26 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
           break;
         } catch (retryError) {
           console.warn(`⚠️ Model ${retryModelName} cũng không hoạt động:`, retryError.message);
+          console.warn(`   Chi tiết:`, retryError);
           continue;
         }
       }
       
       if (!retrySuccess) {
+        // Log đầy đủ thông tin lỗi
+        console.error(`❌ Tất cả các model đều không hoạt động`);
+        console.error(`   Lỗi ban đầu:`, sendError);
         throw sendError; // Ném lỗi ban đầu nếu không model nào hoạt động
       }
     }
     
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
+
+    // Loại bỏ các dấu ** (markdown bold) ở đầu và cuối
+    text = text.replace(/^\*\*+|\*+$/g, '').trim();
+    // Loại bỏ các dấu ** ở đầu và cuối của mỗi dòng (nếu có)
+    text = text.split('\n').map(line => line.replace(/^\*\*+|\*+$/g, '').trim()).join('\n');
 
     res.json({
       response: text,
@@ -212,7 +244,7 @@ Hãy sử dụng thông tin này để trả lời câu hỏi của người dù
       errorDetails = "GEMINI_API_KEY không đúng. Vui lòng kiểm tra lại.";
     } else if (error.message && error.message.includes("404")) {
       errorMessage = "Model không tìm thấy";
-      errorDetails = `Model "${modelName}" không khả dụng. Đã thử các model: ${modelNames.join(", ")}. Có thể API key không có quyền truy cập các model này hoặc model names đã thay đổi.`;
+      errorDetails = `Đã thử tất cả các model: ${modelNames.join(", ")} nhưng không model nào khả dụng. Có thể API key không có quyền truy cập hoặc cần tạo API key mới trong Google AI Studio (https://aistudio.google.com/).`;
     } else if (error.message && error.message.includes("429")) {
       errorMessage = "Đã vượt quá giới hạn API";
       errorDetails = "Vui lòng thử lại sau.";

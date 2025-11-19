@@ -7,6 +7,7 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "seed": "node seedSampleData.js",
+    "create-test-user": "node createTestUser.js",
     "setup-payos": "node setup-payos.js",
     "setup-payment-indexes": "node src/setupPaymentIndexes.js",
     "migrate-course-price": "node src/migrateCoursePrice.js"
