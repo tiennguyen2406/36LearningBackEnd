@@ -91,3 +91,53 @@ export const createInstructorReview = async (req, res) => {
   }
 };
 
+export const deleteInstructorReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    const { userId } = req.body || {};
+
+    if (!reviewId || !userId) {
+      return res
+        .status(400)
+        .json({ error: "reviewId và userId là bắt buộc để xoá" });
+    }
+
+    const review = await InstructorReview.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({ error: "Không tìm thấy đánh giá" });
+    }
+
+    if (String(review.userId) !== String(userId)) {
+      return res
+        .status(403)
+        .json({ error: "Bạn không có quyền xoá đánh giá này" });
+    }
+
+    const instructorId = review.instructorId;
+    await review.deleteOne();
+
+    const stats = await InstructorReview.aggregate([
+      { $match: { instructorId } },
+      {
+        $group: {
+          _id: "$instructorId",
+          averageRating: { $avg: "$rating" },
+          totalReviews: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const summary = stats[0];
+    const averageRating =
+      summary && typeof summary.averageRating === "number"
+        ? Number(summary.averageRating.toFixed(1))
+        : 0;
+    const totalReviews = summary?.totalReviews || 0;
+
+    res.json({ success: true, averageRating, totalReviews });
+  } catch (error) {
+    console.error("Error deleting instructor review:", error);
+    res.status(500).json({ error: "Failed to delete review" });
+  }
+};
+
