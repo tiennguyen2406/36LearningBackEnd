@@ -98,21 +98,30 @@ export const chatWithAI = async (req, res) => {
     // Lấy context từ database
     const dbContext = await getDatabaseContext();
 
-    // Tạo system prompt với thông tin database
-    const systemPrompt = `Bạn là một trợ lý AI thông minh cho nền tảng học tập trực tuyến 36Learning. 
-Bạn có quyền truy cập vào cơ sở dữ liệu của nền tảng và có thể trả lời các câu hỏi về:
-- Khóa học: thông tin, mô tả, giá cả, đánh giá, số học viên
-- Danh mục: các danh mục khóa học có sẵn
-- Người dùng: thông tin cơ bản (không tiết lộ thông tin nhạy cảm)
-- Bài học: các bài học trong khóa học
+    const contextText = dbContext
+      ? JSON.stringify(dbContext, null, 2)
+      : "Không thể tải dữ liệu từ database. Chỉ trả lời dựa trên kiến thức chung và thông tin người dùng cung cấp.";
 
-Hãy trả lời một cách thân thiện, hữu ích và chính xác. Nếu không có thông tin trong database, hãy nói rõ ràng.
-Luôn trả lời bằng tiếng Việt.
+    // Tạo system prompt với thông tin database và hướng dẫn chi tiết
+    const systemPrompt = `Bạn là trợ lý AI logic cho nền tảng học trực tuyến 36Learning.
 
-Dữ liệu hiện tại trong database:
-${JSON.stringify(dbContext, null, 2)}
+Mục tiêu:
+- Giải thích ngắn gọn, đi thẳng trọng tâm câu hỏi.
+- Ưu tiên dữ liệu thực tế từ hệ thống 36Learning. Nếu thiếu dữ liệu, hãy nói rõ và đề xuất bước tiếp theo.
+- Khi có nhiều câu hỏi cùng lúc, hãy trả lời theo từng ý (dùng danh sách ngắn gọn).
+- Giữ văn phong thân thiện, chuyên nghiệp, hoàn toàn bằng tiếng Việt.
+- Nếu cần thêm thông tin để trả lời chính xác, hãy đặt câu hỏi rõ ràng cho người dùng.
 
-Hãy sử dụng thông tin này để trả lời câu hỏi của người dùng một cách chính xác.`;
+Phạm vi kiến thức trong database:
+- Khóa học: tiêu đề, mô tả, danh mục, giảng viên, số học viên, giá, số bài học, đánh giá.
+- Danh mục: tên, mô tả, số lượng khóa học.
+- Người dùng: username, fullName, role, email (không tiết lộ dữ liệu nhạy cảm).
+- Bài học: tiêu đề, loại bài học, thuộc khóa học nào.
+
+Dữ liệu hiện tại:
+${contextText}
+
+Hãy sử dụng dữ liệu trên để trả lời chính xác, có cấu trúc rõ ràng và tập trung vào yêu cầu của người dùng.`;
 
     // Thử các model theo thứ tự (gemini-pro đã không còn được hỗ trợ)
     let model = null;
