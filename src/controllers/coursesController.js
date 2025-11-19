@@ -229,3 +229,49 @@ export const deleteCourse = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Lấy danh sách courses do instructor tạo
+export const getCoursesByInstructor = async (req, res) => {
+  try {
+    const { instructorId } = req.params;
+    
+    if (!instructorId) {
+      return res.status(400).json({ error: "Instructor ID is required" });
+    }
+
+    console.log(`[getCoursesByInstructor] Fetching courses for instructor: ${instructorId}`);
+
+    // Tìm courses với instructor hoặc instructorId
+    const courses = await Course.find({
+      $or: [
+        { instructor: instructorId },
+        { instructorId: instructorId }
+      ]
+    }).populate("category", "name").sort({ createdAt: -1 });
+
+    console.log(`[getCoursesByInstructor] Found ${courses.length} courses`);
+
+    // Lấy số lượng lessons thực tế cho mỗi course
+    const coursesWithDetails = await Promise.all(
+      courses.map(async (course) => {
+        const lessonCount = await Lesson.countDocuments({ courseId: course._id });
+        const courseObj = course.toObject();
+        return {
+          id: courseObj._id.toString(),
+          ...courseObj,
+          _id: undefined,
+          categoryName: course.category?.name || "Chưa có danh mục",
+          category: course.category?._id.toString(),
+          totalLessons: lessonCount,
+          // Thêm status cho frontend
+          status: courseObj.isPublished ? "published" : "pending",
+        };
+      })
+    );
+
+    res.status(200).json(coursesWithDetails);
+  } catch (error) {
+    console.error("[getCoursesByInstructor] Error:", error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};

@@ -1,5 +1,5 @@
 import express from "express";
-import { createCourse, getCourses, getCourseById, updateCourse, deleteCourse, getCoursesByCategory } from "../controllers/coursesController.js";
+import { createCourse, getCourses, getCourseById, updateCourse, deleteCourse, getCoursesByCategory, getCoursesByInstructor } from "../controllers/coursesController.js";
 
 const router = express.Router();
 
@@ -9,6 +9,8 @@ router.post("/", createCourse);
 router.get("/", getCourses);
 // GET /courses/category/:categoryId -> lấy danh sách course theo category
 router.get("/category/:categoryId", getCoursesByCategory);
+// GET /courses/instructor/:instructorId -> lấy danh sách course theo instructor
+router.get("/instructor/:instructorId", getCoursesByInstructor);
 // GET /courses/:id -> lấy chi tiết course
 router.get("/:id", getCourseById);
 // PUT /courses/:id -> cập nhật course
