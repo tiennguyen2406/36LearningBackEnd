@@ -142,6 +142,8 @@ export const chatWithAI = async (req, res) => {
       conversationHistory = [],
       selectedCourseId,
       currentUserId,
+      requestSimilarQuestions = false,
+      numSimilarQuestions = 4,
     } = req.body;
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -179,7 +181,7 @@ export const chatWithAI = async (req, res) => {
       normalizedMessage.includes(keyword)
     );
 
-    if (!isRelevantQuestion && !selectedCourseId) {
+    if (!isRelevantQuestion && !selectedCourseId && !requestSimilarQuestions) {
       return res.status(200).json({
         response:
           "Xin lỗi, trợ lý AI 36Learning chỉ hỗ trợ các câu hỏi liên quan đến khóa học, bài học, danh mục và hoạt động trên nền tảng. Bạn vui lòng đặt câu hỏi phù hợp hơn nhé!",
@@ -221,30 +223,47 @@ ${courseContext.lessons.join("\n") || "Chưa có bài học"}
     }
 
     // Tạo system prompt với thông tin database và hướng dẫn chi tiết
-    const systemPrompt = `Bạn là trợ lý AI logic cho nền tảng học trực tuyến 36Learning.
+    const systemPrompt = `Bạn là trợ lý AI cấp cao của nền tảng 36Learning. Trả lời MỌI câu hỏi bằng tiếng Việt, lập luận chặt chẽ và chỉ dựa trên dữ liệu cho phép.
 
-Mục tiêu:
-- Giải thích ngắn gọn, đi thẳng trọng tâm câu hỏi.
-- Ưu tiên dữ liệu thực tế từ hệ thống 36Learning. Nếu thiếu dữ liệu, hãy nói rõ và đề xuất bước tiếp theo.
-- Khi có nhiều câu hỏi cùng lúc, hãy trả lời theo từng ý (dùng danh sách ngắn gọn).
-- Giữ văn phong thân thiện, chuyên nghiệp, hoàn toàn bằng tiếng Việt.
-- Nếu cần thêm thông tin để trả lời chính xác, hãy đặt câu hỏi rõ ràng cho người dùng.
+Quy tắc suy luận:
+1. Đọc kỹ câu hỏi, xác định các yêu cầu/tiểu mục → liệt kê ngắn gọn các ý chính trước khi trả lời để đảm bảo bao quát.
+2. Với mỗi ý, tìm dữ liệu liên quan trong context. Nếu không có dữ liệu, ghi rõ "Chưa có dữ liệu trong hệ thống".
+3. Ưu tiên phân tích định lượng (số bài, số học viên, tỷ lệ...) hoặc định tính (điểm mạnh khóa học, lộ trình) khi có thể.
+4. Với câu hỏi nhiều bước hoặc yêu cầu logic khó: trình bày từng bước suy luận, nêu giả định (nếu cần) và kiểm tra lại kết luận.
+5. Nếu câu hỏi không thuộc phạm vi học tập/36Learning → trả lời duy nhất: "Xin lỗi, trợ lý AI 36Learning chỉ hỗ trợ các câu hỏi liên quan đến học tập và hoạt động trên nền tảng."
+6. Nếu người dùng đã chọn khóa học:
+   - Tóm tắt giá trị cốt lõi của khóa học, những bài tiêu biểu, kỹ năng đạt được.
+   - Đề xuất 2-3 câu hỏi tiếp theo giúp đào sâu nội dung khóa học đó (ví dụ: bài nào nên học trước, cách áp dụng thực tế, bài tập gợi ý...).
+7. Khi thiếu thông tin quan trọng, đặt câu hỏi lại cho người dùng thay vì đoán.
 
-Phạm vi kiến thức trong database:
+Phạm vi dữ liệu hệ thống:
 - Khóa học: tiêu đề, mô tả, danh mục, giảng viên, số học viên, giá, số bài học, đánh giá.
 - Danh mục: tên, mô tả, số lượng khóa học.
 - Người dùng: username, fullName, role, email (không tiết lộ dữ liệu nhạy cảm).
 - Bài học: tiêu đề, loại bài học, thuộc khóa học nào.
-- Nếu câu hỏi không liên quan đến việc học hoặc nền tảng 36Learning, hãy trả lời duy nhất: "Xin lỗi, trợ lý AI 36Learning chỉ hỗ trợ các câu hỏi liên quan đến học tập và hoạt động trên nền tảng."
-- Nếu người dùng đã chọn khóa học cụ thể, hãy đào sâu vào nội dung khóa học đó, cung cấp nhận xét chi tiết, đồng thời đề xuất 2-3 câu hỏi tiếp theo mà người dùng có thể quan tâm để nghiên cứu sâu hơn.
 
-Dữ liệu khóa học được chọn (nếu có):
+Khóa học đang tập trung (nếu có):
 ${selectedCourseContext || "Người dùng chưa chọn khóa học cụ thể."}
 
-Dữ liệu hiện tại:
+Dữ liệu tổng quan:
 ${contextText}
 
-Hãy sử dụng dữ liệu trên để trả lời chính xác, có cấu trúc rõ ràng và tập trung vào yêu cầu của người dùng.`;
+Hãy trả lời với cấu trúc rõ ràng:
+- Tóm tắt yêu cầu
+- Phân tích chi tiết (theo từng ý)
+- Gợi ý bước tiếp theo hoặc câu hỏi đào sâu (nếu phù hợp)`;
+
+    let finalUserMessage = message;
+    if (requestSimilarQuestions) {
+      const safeCount = Math.min(Math.max(parseInt(numSimilarQuestions, 10) || 4, 2), 8);
+      finalUserMessage = `Người dùng muốn tạo ${safeCount} câu hỏi mẫu tương tự để ôn luyện hoặc thực hành.
+- Câu hỏi/chủ đề gốc: "${message}"
+- Nếu có khóa học đang tập trung, hãy dựa trên nội dung khóa học đó để tạo câu hỏi thực tế, có độ khó tăng dần.
+- Trả lời theo cấu trúc:
+   1. Tóm tắt mục tiêu của bộ câu hỏi.
+   2. Danh sách ${safeCount} câu hỏi mẫu (đánh số và ghi rõ kỹ năng/mục tiêu của từng câu).
+   3. Gợi ý cách sử dụng các câu hỏi này trong việc học.`;
+    }
 
     // Thử các model theo thứ tự (gemini-pro đã không còn được hỗ trợ)
     let model = null;
@@ -300,7 +319,7 @@ Hãy sử dụng dữ liệu trên để trả lời chính xác, có cấu trú
     let result;
     try {
       console.log(`📤 Đang gửi tin nhắn với model: ${modelName}`);
-      result = await chat.sendMessage(message);
+      result = await chat.sendMessage(finalUserMessage);
       console.log(`✅ Đã nhận phản hồi từ model: ${modelName}`);
     } catch (sendError) {
       // Nếu lỗi khi gửi tin nhắn (có thể do model không khả dụng), thử model khác
@@ -329,7 +348,7 @@ Hãy sử dụng dữ liệu trên để trả lời chính xác, có cấu trú
             ],
           });
           
-          result = await retryChat.sendMessage(message);
+          result = await retryChat.sendMessage(finalUserMessage);
           modelName = retryModelName;
           console.log(`✅ Thành công với model: ${retryModelName}`);
           retrySuccess = true;
@@ -380,6 +399,9 @@ Hãy sử dụng dữ liệu trên để trả lời chính xác, có cấu trú
     } else if (error.message && error.message.includes("429")) {
       errorMessage = "Đã vượt quá giới hạn API";
       errorDetails = "Vui lòng thử lại sau.";
+    } else if (error.message && (error.message.includes("503") || error.message.toLowerCase().includes("unavailable"))) {
+      errorMessage = "Dịch vụ AI đang bận";
+      errorDetails = "Gemini AI hiện chưa phản hồi. Vui lòng đợi vài giây rồi thử lại.";
     }
 
     res.status(500).json({
