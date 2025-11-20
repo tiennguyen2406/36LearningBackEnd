@@ -71,9 +71,37 @@ export const summarizeVideo = async (req, res) => {
     fs.writeFileSync(tempFilePath, videoFile.buffer);
 
     try {
-      // Sử dụng Gemini 1.5 Flash để xử lý video
-      const modelName = "gemini-1.5-flash";
-      const model = genAI.getGenerativeModel({ model: modelName });
+      // Sử dụng Gemini 2.5 Flash để xử lý video (ưu tiên)
+      // Thử các model theo thứ tự ưu tiên
+      const modelNames = [
+        "gemini-2.5-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro-latest",
+        "gemini-1.5-pro",
+      ];
+      
+      let model = null;
+      let modelName = null;
+      let lastError = null;
+      
+      // Thử từng model cho đến khi tìm được model hoạt động
+      for (const testModelName of modelNames) {
+        try {
+          console.log(`🔧 Đang thử model: ${testModelName}`);
+          model = genAI.getGenerativeModel({ model: testModelName });
+          modelName = testModelName;
+          console.log(`✅ Đã chọn model: ${testModelName}`);
+          break;
+        } catch (modelError) {
+          console.warn(`⚠️ Model ${testModelName} không khả dụng:`, modelError.message);
+          lastError = modelError;
+          continue;
+        }
+      }
+      
+      if (!model) {
+        throw new Error(`Không thể khởi tạo model. Đã thử: ${modelNames.join(", ")}. Lỗi: ${lastError?.message || "Unknown"}`);
+      }
 
       console.log(`🤖 Đang gửi video đến Gemini ${modelName}...`);
 
