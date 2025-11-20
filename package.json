@@ -10,7 +10,9 @@
     "create-test-user": "node createTestUser.js",
     "setup-payos": "node setup-payos.js",
     "setup-payment-indexes": "node src/setupPaymentIndexes.js",
-    "migrate-course-price": "node src/migrateCoursePrice.js"
+    "migrate-course-price": "node src/migrateCoursePrice.js",
+    "seed-course-reviews": "node src/seedCourseReviews.js",
+    "update-course-ratings": "node src/updateAllCourseRatings.js"
   },
   "keywords": [],
   "author": "",
