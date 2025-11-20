@@ -31,6 +31,16 @@ const userSchema = new mongoose.Schema(
       ref: "Course",
       default: [],
     },
+    following: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
+    },
+    followers: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
+    },
     role: {
       type: String,
       enum: ["student", "instructor", "admin"],

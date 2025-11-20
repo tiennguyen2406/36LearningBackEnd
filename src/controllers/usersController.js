@@ -323,3 +323,153 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+// Follow/Unfollow instructor
+export const followInstructor = async (req, res) => {
+  try {
+    const { userId, instructorId } = req.body;
+
+    if (!userId || !instructorId) {
+      return res.status(400).json({
+        error: "Thiếu userId hoặc instructorId",
+      });
+    }
+
+    if (userId === instructorId) {
+      return res.status(400).json({
+        error: "Bạn không thể follow chính mình",
+      });
+    }
+
+    const user = await User.findById(userId);
+    const instructor = await User.findById(instructorId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User không tồn tại" });
+    }
+
+    if (!instructor) {
+      return res.status(404).json({ error: "Instructor không tồn tại" });
+    }
+
+    // Kiểm tra đã follow chưa
+    const isFollowing = user.following.some(
+      (id) => id.toString() === instructorId
+    );
+
+    if (isFollowing) {
+      return res.status(400).json({
+        error: "Bạn đã follow instructor này rồi",
+      });
+    }
+
+    // Thêm instructorId vào following của user
+    user.following.push(instructorId);
+    await user.save();
+
+    // Thêm userId vào followers của instructor
+    instructor.followers.push(userId);
+    await instructor.save();
+
+    return res.json({
+      message: "Đã follow instructor thành công",
+      followingCount: user.following.length,
+      followerCount: instructor.followers.length,
+    });
+  } catch (error) {
+    console.error("Error following instructor:", error);
+    return res.status(500).json({
+      error: "Lỗi khi follow instructor",
+      details: error.message,
+    });
+  }
+};
+
+export const unfollowInstructor = async (req, res) => {
+  try {
+    const { userId, instructorId } = req.body;
+
+    if (!userId || !instructorId) {
+      return res.status(400).json({
+        error: "Thiếu userId hoặc instructorId",
+      });
+    }
+
+    const user = await User.findById(userId);
+    const instructor = await User.findById(instructorId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User không tồn tại" });
+    }
+
+    if (!instructor) {
+      return res.status(404).json({ error: "Instructor không tồn tại" });
+    }
+
+    // Kiểm tra đã follow chưa
+    const isFollowing = user.following.some(
+      (id) => id.toString() === instructorId
+    );
+
+    if (!isFollowing) {
+      return res.status(400).json({
+        error: "Bạn chưa follow instructor này",
+      });
+    }
+
+    // Xóa instructorId khỏi following của user
+    user.following = user.following.filter(
+      (id) => id.toString() !== instructorId
+    );
+    await user.save();
+
+    // Xóa userId khỏi followers của instructor
+    instructor.followers = instructor.followers.filter(
+      (id) => id.toString() !== userId
+    );
+    await instructor.save();
+
+    return res.json({
+      message: "Đã unfollow instructor thành công",
+      followingCount: user.following.length,
+      followerCount: instructor.followers.length,
+    });
+  } catch (error) {
+    console.error("Error unfollowing instructor:", error);
+    return res.status(500).json({
+      error: "Lỗi khi unfollow instructor",
+      details: error.message,
+    });
+  }
+};
+
+export const checkFollowStatus = async (req, res) => {
+  try {
+    const { userId, instructorId } = req.query;
+
+    if (!userId || !instructorId) {
+      return res.status(400).json({
+        error: "Thiếu userId hoặc instructorId",
+      });
+    }
+
+    const user = await User.findById(userId).select("following");
+    if (!user) {
+      return res.status(404).json({ error: "User không tồn tại" });
+    }
+
+    const isFollowing = user.following.some(
+      (id) => id.toString() === instructorId
+    );
+
+    return res.json({
+      isFollowing,
+    });
+  } catch (error) {
+    console.error("Error checking follow status:", error);
+    return res.status(500).json({
+      error: "Lỗi khi kiểm tra follow status",
+      details: error.message,
+    });
+  }
+};

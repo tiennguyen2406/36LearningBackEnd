@@ -9,6 +9,9 @@ import {
   enrollCourse,
   unenrollCourse,
   loginUser,
+  followInstructor,
+  unfollowInstructor,
+  checkFollowStatus,
 } from "../controllers/usersController.js";
 
 const router = express.Router();
@@ -39,5 +42,14 @@ router.put("/:id", updateUser);
 
 // DELETE /users/:id -> xóa user
 router.delete("/:id", deleteUser);
+
+// POST /users/follow -> follow instructor
+router.post("/follow", followInstructor);
+
+// POST /users/unfollow -> unfollow instructor
+router.post("/unfollow", unfollowInstructor);
+
+// GET /users/check-follow?userId=...&instructorId=... -> kiểm tra follow status
+router.get("/check-follow", checkFollowStatus);
 
 export default router;

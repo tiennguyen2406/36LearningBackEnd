@@ -1,15 +1,15 @@
 import express from "express";
 import multer from "multer";
-import { summarizeVideo } from "../controllers/videoSummaryController.js";
+import { summarizeVideo, summarizeVideoFromUrl } from "../controllers/videoSummaryController.js";
 
 const router = express.Router();
 
 // Cấu hình multer để nhận file video
-// Tăng giới hạn kích thước lên 20MB (Gemini 1.5 Flash hỗ trợ tối đa 20MB)
+// Giới hạn 10MB để đảm bảo upload thành công
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB
+    fileSize: 10 * 1024 * 1024, // 10MB
   },
   fileFilter: (req, file, cb) => {
     // Chỉ chấp nhận file video
@@ -21,8 +21,11 @@ const upload = multer({
   },
 });
 
-// POST /video-summary - Tóm tắt video
+// POST /video-summary - Tóm tắt video (upload file)
 router.post("/", upload.single("video"), summarizeVideo);
+
+// POST /video-summary/url - Tóm tắt video từ URL
+router.post("/url", express.json(), summarizeVideoFromUrl);
 
 // GET /video-summary - Health check
 router.get("/", (req, res) => {
@@ -30,7 +33,7 @@ router.get("/", (req, res) => {
     status: "ok",
     message: "Video Summary endpoint is ready. Use POST method to upload video.",
     endpoint: "POST /video-summary",
-    maxFileSize: "20MB",
+    maxFileSize: "10MB",
     supportedFormats: ["MP4", "MOV", "AVI", "WebM"],
   });
 });
