@@ -13,6 +13,7 @@ import quizResultsRoutes from "./routes/quizResults.js";
 import paymentsRoutes from "./routes/payments.js";
 import aiChatRoutes from "./routes/aiChat.js";
 import instructorReviewsRoutes from "./routes/instructorReviews.js";
+import videoSummaryRoutes from "./routes/videoSummary.js";
 import mongoose from "mongoose";
 
 // Lấy đường dẫn thư mục hiện tại
@@ -115,6 +116,7 @@ app.use("/quiz-results", quizResultsRoutes);
 app.use("/payments", paymentsRoutes);
 app.use("/ai-chat", aiChatRoutes);
 app.use("/instructor-reviews", instructorReviewsRoutes);
+app.use("/video-summary", videoSummaryRoutes);
 
 // Health & root endpoints để kiểm tra nhanh từ thiết bị
 app.get("/health", (req, res) => {

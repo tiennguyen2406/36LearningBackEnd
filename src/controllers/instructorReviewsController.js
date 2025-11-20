@@ -13,16 +13,25 @@ export const getInstructorReviews = async (req, res) => {
       .limit(200)
       .lean();
 
+    const normalizedReviews = (reviews || []).map((review) => ({
+      ...review,
+      id: review._id?.toString(),
+      instructorId: review.instructorId?.toString(),
+      userId: review.userId?.toString(),
+    }));
+
     const avg =
-      reviews.length > 0
-        ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) /
-          reviews.length
+      normalizedReviews.length > 0
+        ? normalizedReviews.reduce(
+            (sum, r) => sum + (Number(r.rating) || 0),
+            0
+          ) / normalizedReviews.length
         : 0;
 
     res.json({
-      reviews,
+      reviews: normalizedReviews,
       averageRating: Number(avg.toFixed(1)),
-      totalReviews: reviews.length,
+      totalReviews: normalizedReviews.length,
     });
   } catch (error) {
     console.error("Error fetching instructor reviews:", error);
@@ -94,7 +103,10 @@ export const createInstructorReview = async (req, res) => {
 export const deleteInstructorReview = async (req, res) => {
   try {
     const { reviewId } = req.params;
-    const { userId } = req.body || {};
+    const userIdFromBody = req.body?.userId;
+    const userIdFromQuery = req.query?.userId;
+    const userIdFromHeader = req.headers["x-user-id"];
+    const userId = userIdFromBody || userIdFromQuery || userIdFromHeader;
 
     if (!reviewId || !userId) {
       return res
@@ -107,7 +119,12 @@ export const deleteInstructorReview = async (req, res) => {
       return res.status(404).json({ error: "Không tìm thấy đánh giá" });
     }
 
-    if (String(review.userId) !== String(userId)) {
+    const reviewOwnerId =
+      typeof review.userId?.toString === "function"
+        ? review.userId.toString()
+        : String(review.userId);
+
+    if (reviewOwnerId !== String(userId)) {
       return res
         .status(403)
         .json({ error: "Bạn không có quyền xoá đánh giá này" });
