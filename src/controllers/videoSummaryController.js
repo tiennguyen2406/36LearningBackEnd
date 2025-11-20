@@ -85,36 +85,50 @@ export const summarizeVideo = async (req, res) => {
 
       let result;
       
-      // Với file lớn hơn 2MB, sử dụng File API
-      // Với file nhỏ hơn, có thể dùng inlineData
-      if (videoFile.size > 2 * 1024 * 1024) {
-        // Upload file lên Gemini File API
-        console.log("📤 Đang upload video lên Gemini File API...");
-        const uploadResult = await genAI.uploadFile({
+      // Gemini 1.5 Flash yêu cầu upload file qua File API cho video
+      // Không hỗ trợ inlineData cho video
+      console.log("📤 Đang upload video lên Gemini File API...");
+      
+      let uploadResult;
+      try {
+        uploadResult = await genAI.uploadFile({
           fileData: {
             data: videoData,
             mimeType: videoFile.mimetype,
           },
           displayName: videoFile.originalname,
         });
-        
-        console.log(`✅ Đã upload file: ${uploadResult.file.uri}`);
-        
-        // Đợi file được xử lý
-        let file = await genAI.getFile(uploadResult.file.name);
-        let timeout = 0;
-        while (file.state === "PROCESSING" && timeout < 60) {
-          console.log("⏳ Đang chờ file được xử lý...");
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          file = await genAI.getFile(uploadResult.file.name);
-          timeout += 2;
-        }
-        
-        if (file.state === "FAILED") {
-          throw new Error("File upload failed");
-        }
-        
-        // Sử dụng file đã upload
+        console.log(`✅ Đã upload file: ${uploadResult.file.uri} (name: ${uploadResult.file.name})`);
+      } catch (uploadError) {
+        console.error("❌ Lỗi khi upload file:", uploadError);
+        throw new Error(`Không thể upload video: ${uploadError.message}`);
+      }
+      
+      // Đợi file được xử lý (state phải là ACTIVE)
+      console.log("⏳ Đang chờ file được xử lý...");
+      let file = await genAI.getFile(uploadResult.file.name);
+      let timeout = 0;
+      const maxWaitTime = 120; // Tối đa 2 phút
+      
+      while (file.state === "PROCESSING" && timeout < maxWaitTime) {
+        console.log(`   Trạng thái: ${file.state} (đã chờ ${timeout}s)`);
+        await new Promise((resolve) => setTimeout(resolve, 3000)); // Chờ 3 giây
+        file = await genAI.getFile(uploadResult.file.name);
+        timeout += 3;
+      }
+      
+      if (file.state === "FAILED") {
+        throw new Error("File upload failed - file state is FAILED");
+      }
+      
+      if (file.state !== "ACTIVE") {
+        throw new Error(`File chưa sẵn sàng. Trạng thái: ${file.state}`);
+      }
+      
+      console.log(`✅ File đã sẵn sàng (state: ${file.state}), đang gửi đến model...`);
+      
+      // Sử dụng file đã upload
+      try {
         result = await model.generateContent([
           {
             fileData: {
@@ -124,25 +138,18 @@ export const summarizeVideo = async (req, res) => {
           },
           { text: prompt },
         ]);
-        
+        console.log("✅ Đã nhận phản hồi từ model");
+      } catch (generateError) {
+        console.error("❌ Lỗi khi generate content:", generateError);
+        throw generateError;
+      } finally {
         // Xóa file sau khi sử dụng
         try {
           await genAI.deleteFile(uploadResult.file.name);
+          console.log("🗑️ Đã xóa file từ Gemini");
         } catch (deleteError) {
           console.warn("⚠️ Không thể xóa file từ Gemini:", deleteError.message);
         }
-      } else {
-        // Sử dụng inlineData cho file nhỏ
-        const videoBase64 = videoData.toString("base64");
-        result = await model.generateContent([
-          {
-            inlineData: {
-              data: videoBase64,
-              mimeType: videoFile.mimetype,
-            },
-          },
-          { text: prompt },
-        ]);
       }
 
       const response = await result.response;
@@ -169,31 +176,48 @@ export const summarizeVideo = async (req, res) => {
     } catch (geminiError) {
       // Xóa file tạm nếu có lỗi
       if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath);
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (unlinkError) {
+          console.warn("⚠️ Không thể xóa file tạm:", unlinkError.message);
+        }
       }
 
-      console.error("❌ Lỗi khi gọi Gemini API:", geminiError);
+      console.error("❌ Lỗi khi gọi Gemini API:");
+      console.error("   Message:", geminiError.message);
+      console.error("   Stack:", geminiError.stack);
+      console.error("   Full error:", JSON.stringify(geminiError, null, 2));
 
       // Xử lý lỗi cụ thể
       let errorMessage = "Lỗi khi xử lý video với AI";
-      let errorDetails = geminiError.message;
+      let errorDetails = geminiError.message || String(geminiError);
 
-      if (geminiError.message && geminiError.message.includes("403")) {
+      // Kiểm tra các loại lỗi phổ biến
+      const errorStr = String(geminiError.message || geminiError).toLowerCase();
+      
+      if (errorStr.includes("403") || errorStr.includes("permission") || errorStr.includes("forbidden")) {
         errorMessage = "API Key không hợp lệ hoặc không có quyền truy cập";
         errorDetails =
           "Vui lòng kiểm tra GEMINI_API_KEY trong file .env. Đảm bảo API key hợp lệ và đã được kích hoạt trong Google AI Studio.";
-      } else if (geminiError.message && geminiError.message.includes("400")) {
-        errorMessage = "Video không hợp lệ hoặc quá lớn";
+      } else if (errorStr.includes("400") || errorStr.includes("bad request") || errorStr.includes("invalid")) {
+        errorMessage = "Video không hợp lệ hoặc không được hỗ trợ";
         errorDetails =
-          "Gemini không thể xử lý video này. Vui lòng thử với video khác hoặc giảm kích thước file.";
-      } else if (geminiError.message && geminiError.message.includes("429")) {
+          "Gemini không thể xử lý video này. Vui lòng thử với video khác (MP4, MOV) hoặc giảm kích thước file.";
+      } else if (errorStr.includes("429") || errorStr.includes("quota") || errorStr.includes("rate limit")) {
         errorMessage = "Đã vượt quá giới hạn API";
         errorDetails = "Vui lòng thử lại sau.";
+      } else if (errorStr.includes("file") && errorStr.includes("upload")) {
+        errorMessage = "Không thể upload video lên Gemini";
+        errorDetails = "Có thể do kết nối mạng hoặc file quá lớn. Vui lòng thử lại.";
+      } else if (errorStr.includes("timeout")) {
+        errorMessage = "Quá trình xử lý video quá lâu";
+        errorDetails = "Video có thể quá dài hoặc phức tạp. Vui lòng thử với video ngắn hơn.";
       }
 
       return res.status(500).json({
         error: errorMessage,
         details: errorDetails,
+        rawError: process.env.NODE_ENV === "development" ? String(geminiError) : undefined,
       });
     }
   } catch (error) {
