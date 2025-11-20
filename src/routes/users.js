@@ -25,6 +25,15 @@ router.post("/login", loginUser);
 // GET /users -> lấy danh sách users
 router.get("/", getUsers);
 
+// POST /users/follow -> follow instructor
+router.post("/follow", followInstructor);
+
+// POST /users/unfollow -> unfollow instructor
+router.post("/unfollow", unfollowInstructor);
+
+// GET /users/check-follow?userId=...&instructorId=... -> kiểm tra follow status
+router.get("/check-follow", checkFollowStatus);
+
 // GET /users/:uid/courses -> lấy danh sách khóa học của user
 router.get("/:uid/courses", getUserCourses);
 
@@ -42,14 +51,5 @@ router.put("/:id", updateUser);
 
 // DELETE /users/:id -> xóa user
 router.delete("/:id", deleteUser);
-
-// POST /users/follow -> follow instructor
-router.post("/follow", followInstructor);
-
-// POST /users/unfollow -> unfollow instructor
-router.post("/unfollow", unfollowInstructor);
-
-// GET /users/check-follow?userId=...&instructorId=... -> kiểm tra follow status
-router.get("/check-follow", checkFollowStatus);
 
 export default router;
