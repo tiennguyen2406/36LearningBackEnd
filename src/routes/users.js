@@ -4,6 +4,7 @@ import {
   getUsers,
   getUserById,
   updateUser,
+  updateUserPreferences,
   deleteUser,
   getUserCourses,
   enrollCourse,
@@ -60,6 +61,9 @@ router.get("/:id", getUserById);
 
 // PUT /users/:id -> cập nhật thông tin user
 router.put("/:id", updateUser);
+
+// PATCH /users/:id/preferences -> cập nhật preferences (tối ưu cho theme)
+router.patch("/:id/preferences", updateUserPreferences);
 
 // DELETE /users/:id -> xóa user
 router.delete("/:id", deleteUser);

@@ -150,12 +150,70 @@ export const updateUser = async (req, res) => {
     delete data.createdAt;
     delete data.username;
 
+    // Nếu có preferences, merge với preferences hiện tại
+    if (data.preferences && typeof data.preferences === 'object') {
+      data.preferences = {
+        ...(user.preferences || {}),
+        ...data.preferences,
+      };
+    }
+
     // Cập nhật thông tin user
     await User.findByIdAndUpdate(uid, data, { new: true, runValidators: true });
     res.status(200).json({ message: "Đã cập nhật thông tin người dùng" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+// Cập nhật preferences của user (tối ưu cho theme và các settings)
+export const updateUserPreferences = async (req, res) => {
+  try {
+    const uid = req.params.id;
+    const { preferences } = req.body;
+
+    if (!preferences || typeof preferences !== 'object') {
+      return res.status(400).json({ error: "Preferences không hợp lệ" });
+    }
+
+    // Kiểm tra user có tồn tại không
+    const user = await User.findById(uid);
+    if (!user) {
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    }
+
+    // Merge preferences với preferences hiện tại
+    const updatedPreferences = {
+      ...(user.preferences || {}),
+      ...preferences,
+    };
+
+    // Validate preferences
+    if (updatedPreferences.language && typeof updatedPreferences.language !== 'string') {
+      return res.status(400).json({ error: "Language phải là string" });
+    }
+    if (updatedPreferences.darkMode !== undefined && typeof updatedPreferences.darkMode !== 'boolean') {
+      return res.status(400).json({ error: "darkMode phải là boolean" });
+    }
+    if (updatedPreferences.notifications !== undefined && typeof updatedPreferences.notifications !== 'boolean') {
+      return res.status(400).json({ error: "notifications phải là boolean" });
+    }
+
+    // Cập nhật chỉ preferences (tối ưu hơn)
+    await User.findByIdAndUpdate(
+      uid,
+      { preferences: updatedPreferences },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({ 
+      message: "Đã cập nhật preferences thành công",
+      preferences: updatedPreferences
+    });
+  } catch (error) {
+    console.error("Error updating user preferences:", error);
+    res.status(500).json({ error: "Lỗi khi cập nhật preferences" });
   }
 };
 
