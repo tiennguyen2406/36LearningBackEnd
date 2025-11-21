@@ -57,10 +57,19 @@ router.post("/:uid/save-course", saveCourse);
 router.post("/:uid/unsave-course", unsaveCourse);
 
 // PATCH /users/:id/preferences -> cập nhật preferences (tối ưu cho theme)
-// PHẢI ĐẶT TRƯỚC /:id để tránh match sai
-router.patch("/:id/preferences", updateUserPreferences);
+// PHẢI ĐẶT TRƯỚC các route /:id để tránh match sai
+// Hỗ trợ cả :id và :uid để tương thích
+router.patch("/:id/preferences", (req, res, next) => {
+  console.log("🔍 PATCH /users/:id/preferences matched, id:", req.params.id);
+  updateUserPreferences(req, res, next);
+});
+router.patch("/:uid/preferences", (req, res, next) => {
+  console.log("🔍 PATCH /users/:uid/preferences matched, uid:", req.params.uid);
+  req.params.id = req.params.uid; // Chuyển uid thành id cho controller
+  updateUserPreferences(req, res, next);
+});
 
-// GET /users/:id -> lấy user theo ID
+// GET /users/:id -> lấy user theo ID (phải đặt sau các route cụ thể)
 router.get("/:id", getUserById);
 
 // PUT /users/:id -> cập nhật thông tin user

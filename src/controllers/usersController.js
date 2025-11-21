@@ -170,8 +170,10 @@ export const updateUser = async (req, res) => {
 // Cập nhật preferences của user (tối ưu cho theme và các settings)
 export const updateUserPreferences = async (req, res) => {
   try {
-    const uid = req.params.id;
+    const uid = req.params.id || req.params.uid; // Hỗ trợ cả :id và :uid
     const { preferences } = req.body;
+
+    console.log("📝 updateUserPreferences called with uid:", uid, "preferences:", preferences);
 
     if (!preferences || typeof preferences !== 'object') {
       return res.status(400).json({ error: "Preferences không hợp lệ" });
@@ -207,12 +209,14 @@ export const updateUserPreferences = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    console.log("✅ Preferences updated successfully for user:", uid);
+
     res.status(200).json({ 
       message: "Đã cập nhật preferences thành công",
       preferences: updatedPreferences
     });
   } catch (error) {
-    console.error("Error updating user preferences:", error);
+    console.error("❌ Error updating user preferences:", error);
     res.status(500).json({ error: "Lỗi khi cập nhật preferences" });
   }
 };
