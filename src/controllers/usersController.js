@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Course from "../models/Course.js";
 import Category from "../models/Category.js";
@@ -471,5 +472,140 @@ export const checkFollowStatus = async (req, res) => {
       error: "Lỗi khi kiểm tra follow status",
       details: error.message,
     });
+  }
+};
+
+// Lưu khóa học vào danh sách đã lưu
+export const saveCourse = async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { courseId } = req.body;
+
+    if (!uid || !courseId) {
+      return res.status(400).json({ error: "Thiếu uid hoặc courseId" });
+    }
+
+    const user = await User.findById(uid);
+    if (!user) {
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    }
+
+    // Lấy savedCourses hiện tại
+    const savedCourses = Array.isArray(user.savedCourses) ? user.savedCourses : [];
+    const normalizedCourseId = String(courseId);
+    const normalizedSaved = savedCourses.map((id) => String(id));
+
+    // Kiểm tra đã lưu chưa
+    if (normalizedSaved.includes(normalizedCourseId)) {
+      return res.status(200).json({ message: "Khóa học đã được lưu" });
+    }
+
+    // Thêm courseId vào savedCourses
+    user.savedCourses.push(normalizedCourseId);
+    await user.save();
+
+    return res.status(200).json({ 
+      message: "Đã lưu khóa học thành công",
+      savedCourses: user.savedCourses 
+    });
+  } catch (error) {
+    console.error("Error saving course:", error);
+    return res.status(500).json({ error: "Lỗi khi lưu khóa học" });
+  }
+};
+
+// Bỏ lưu khóa học
+export const unsaveCourse = async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { courseId } = req.body;
+
+    if (!uid || !courseId) {
+      return res.status(400).json({ error: "Thiếu uid hoặc courseId" });
+    }
+
+    const user = await User.findById(uid);
+    if (!user) {
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    }
+
+    // Lấy savedCourses hiện tại
+    const savedCourses = Array.isArray(user.savedCourses) ? user.savedCourses : [];
+    const normalizedCourseId = String(courseId);
+
+    // Xóa courseId khỏi savedCourses
+    user.savedCourses = savedCourses.filter((id) => String(id) !== normalizedCourseId);
+    await user.save();
+
+    return res.status(200).json({ 
+      message: "Đã bỏ lưu khóa học thành công",
+      savedCourses: user.savedCourses 
+    });
+  } catch (error) {
+    console.error("Error unsaving course:", error);
+    return res.status(500).json({ error: "Lỗi khi bỏ lưu khóa học" });
+  }
+};
+
+// Lấy danh sách khóa học đã lưu
+export const getSavedCourses = async (req, res) => {
+  try {
+    const { uid } = req.params;
+
+    if (!uid) {
+      return res.status(400).json({ error: "Thiếu uid" });
+    }
+
+    const user = await User.findById(uid).select("savedCourses");
+    if (!user) {
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    }
+
+    const savedCourseIds = Array.isArray(user.savedCourses) ? user.savedCourses : [];
+
+    if (savedCourseIds.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    // Convert string IDs to ObjectId for MongoDB query
+    const objectIds = savedCourseIds
+      .map((id) => {
+        try {
+          return mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    if (objectIds.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    // Lấy thông tin chi tiết của các khóa học đã lưu
+    const courses = await Course.find({ 
+      _id: { $in: objectIds } 
+    }).populate("category", "name");
+
+    // Lấy số lượng lessons thực tế cho mỗi course
+    const coursesWithDetails = await Promise.all(
+      courses.map(async (course) => {
+        const lessonCount = await Lesson.countDocuments({ courseId: course._id });
+        const courseObj = course.toObject();
+        return {
+          id: courseObj._id.toString(),
+          ...courseObj,
+          _id: undefined,
+          categoryName: course.category?.name || undefined,
+          category: course.category?._id.toString(),
+          totalLessons: lessonCount,
+        };
+      })
+    );
+
+    return res.status(200).json(coursesWithDetails);
+  } catch (error) {
+    console.error("Error getting saved courses:", error);
+    return res.status(500).json({ error: "Lỗi khi lấy danh sách khóa học đã lưu" });
   }
 };

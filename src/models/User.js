@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema(
       ref: "Course",
       default: [],
     },
+    savedCourses: {
+      type: [String],
+      default: [],
+    },
     following: {
       type: [mongoose.Schema.Types.ObjectId],
       ref: "User",
