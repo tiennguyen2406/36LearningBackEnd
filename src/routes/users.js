@@ -56,14 +56,15 @@ router.post("/:uid/save-course", saveCourse);
 // POST /users/:uid/unsave-course -> bỏ lưu khóa học
 router.post("/:uid/unsave-course", unsaveCourse);
 
+// PATCH /users/:id/preferences -> cập nhật preferences (tối ưu cho theme)
+// PHẢI ĐẶT TRƯỚC /:id để tránh match sai
+router.patch("/:id/preferences", updateUserPreferences);
+
 // GET /users/:id -> lấy user theo ID
 router.get("/:id", getUserById);
 
 // PUT /users/:id -> cập nhật thông tin user
 router.put("/:id", updateUser);
-
-// PATCH /users/:id/preferences -> cập nhật preferences (tối ưu cho theme)
-router.patch("/:id/preferences", updateUserPreferences);
 
 // DELETE /users/:id -> xóa user
 router.delete("/:id", deleteUser);
