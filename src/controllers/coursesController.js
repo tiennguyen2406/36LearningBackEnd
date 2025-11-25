@@ -177,9 +177,58 @@ export const updateCourse = async (req, res) => {
     const oldCategoryId = course.category?.toString();
     const oldPublished = course.isPublished;
 
+    // Tách lessons ra khỏi data trước khi update course
+    const lessonsData = data.lessons;
+    delete data.lessons;
+
     // Cập nhật khóa học
     Object.assign(course, data);
     await course.save();
+
+    // Xử lý cập nhật lessons nếu có
+    if (Array.isArray(lessonsData)) {
+      // Lấy danh sách lesson IDs hiện tại
+      const existingLessons = await Lesson.find({ courseId });
+      const existingLessonIds = existingLessons.map(l => l._id.toString());
+      const updatedLessonIds = lessonsData
+        .filter(l => l.id)
+        .map(l => String(l.id));
+
+      // Xóa những lessons không còn trong danh sách mới
+      const lessonsToDelete = existingLessonIds.filter(
+        id => !updatedLessonIds.includes(id)
+      );
+      if (lessonsToDelete.length > 0) {
+        await Lesson.deleteMany({ _id: { $in: lessonsToDelete } });
+      }
+
+      // Cập nhật hoặc tạo mới lessons
+      for (const lessonData of lessonsData) {
+        const lessonPayload = {
+          courseId: course._id,
+          title: lessonData.title,
+          description: lessonData.description || "",
+          videoUrl: lessonData.videoUrl || "",
+          duration: lessonData.duration || 0,
+          order: lessonData.order || 0,
+          attachments: lessonData.attachments || [],
+          isPreview: lessonData.isPreview ?? false,
+          kind: lessonData.kind || (lessonData.questions ? "quiz" : "video"),
+        };
+        
+        if (lessonPayload.kind === "quiz" && Array.isArray(lessonData.questions)) {
+          lessonPayload.questions = lessonData.questions;
+        }
+
+        if (lessonData.id) {
+          // Cập nhật lesson hiện có
+          await Lesson.findByIdAndUpdate(lessonData.id, lessonPayload);
+        } else {
+          // Tạo lesson mới
+          await Lesson.create(lessonPayload);
+        }
+      }
+    }
 
     // Cập nhật số lượng khóa học cho các danh mục nếu cần
     const newCategoryId = data.category?.toString();
